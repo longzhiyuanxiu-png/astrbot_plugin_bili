@@ -323,6 +323,9 @@ body{background-attachment:fixed}
 .cal-nav button{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--text2);cursor:pointer;font-size:13px;line-height:1}
 .cal-nav button:hover{border-color:rgba(47,109,246,.4);color:var(--accent)}
 .cal-nav button.now{width:auto;min-width:26px;padding:0 7px;font-size:12px;font-weight:600}
+.cal-mpick{border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);font-size:13px;font-weight:700;padding:4px 6px;max-width:160px;cursor:pointer;outline:none}
+.cal-mpick:hover{border-color:rgba(47,109,246,.45)}
+.cal-mpick:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,109,246,.12)}
 .cal-nav button.now:hover{background:rgba(47,109,246,.08)}
 .cal-d.today{box-shadow:inset 0 0 0 1.5px rgba(47,109,246,.55)}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
@@ -1028,7 +1031,18 @@ function renderCal(){
   var y = calRef.getFullYear(), m = calRef.getMonth();
   var first = new Date(y, m, 1), start = first.getDay(), days = new Date(y, m + 1, 0).getDate();
   var todayKey = ymd(Math.floor(Date.now() / 1000));
-  var html = '<div class="cal-head"><div class="cal-title">' + y + ' 年 ' + (m + 1) + ' 月</div>'
+  var monthSet = {};
+  Object.keys(counts).forEach(function(k){ monthSet[k.slice(0, 7)] = (monthSet[k.slice(0, 7)] || 0) + counts[k]; });
+  var curKey = y + "-" + calPrefix(m + 1);
+  monthSet[curKey] = monthSet[curKey] || 0;
+  var monthKeys = Object.keys(monthSet).sort().reverse();
+  var opts = monthKeys.map(function(mk){
+    var yy = mk.slice(0, 4), mm = String(Number(mk.slice(5, 7)));
+    var cnt = monthSet[mk] || 0;
+    return '<option value="' + mk + '"' + (mk === curKey ? ' selected' : '') + '>' + yy + ' 年 ' + mm + ' 月'
+      + (cnt ? '（' + cnt + '）' : '') + '</option>';
+  }).join("");
+  var html = '<div class="cal-head"><select class="cal-mpick" title="跳到有笔记的月份">' + opts + '</select>'
     + '<div class="cal-nav"><button class="now" data-today="1" title="回到今天">今天</button><button data-mv="-1">‹</button><button data-mv="1">›</button></div></div>'
     + '<div class="cal-grid">' + ["日","一","二","三","四","五","六"].map(function(w){ return '<div class="cal-w">' + w + '</div>'; }).join("");
   for (var i = 0; i < start; i++) html += '<div class="cal-d"></div>';
@@ -1131,6 +1145,15 @@ function bind(){
     if (bk) bk.classList.add("show");
   }
   (function bindCal(){
+  document.addEventListener("change", function(e){
+    var sel = e.target.closest ? e.target.closest(".cal-mpick") : null;
+    if (!sel) return;
+    var v = sel.value || "";
+    var yy = Number(v.slice(0, 4)), mm = Number(v.slice(5, 7));
+    if (!yy || !mm) return;
+    calRef = new Date(yy, mm - 1, 1);
+    renderCal(); renderNotes();
+  });
   document.addEventListener("click", function(e){
     var box = e.target.closest ? e.target.closest("#cal") : null;
     if (!box) return;
