@@ -322,6 +322,9 @@ body{background-attachment:fixed}
 .cal-nav{display:flex;gap:6px}
 .cal-nav button{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--text2);cursor:pointer;font-size:13px;line-height:1}
 .cal-nav button:hover{border-color:rgba(47,109,246,.4);color:var(--accent)}
+.cal-nav button.now{width:auto;min-width:26px;padding:0 7px;font-size:12px;font-weight:600}
+.cal-nav button.now:hover{background:rgba(47,109,246,.08)}
+.cal-d.today{box-shadow:inset 0 0 0 1.5px rgba(47,109,246,.55)}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .cal-w{font-size:12.5px;font-weight:600;color:var(--muted);text-align:center;padding:4px 0 6px}
 .cal-d{position:relative;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--text2);cursor:default;border:1px solid transparent}
@@ -1026,13 +1029,13 @@ function renderCal(){
   var first = new Date(y, m, 1), start = first.getDay(), days = new Date(y, m + 1, 0).getDate();
   var todayKey = ymd(Math.floor(Date.now() / 1000));
   var html = '<div class="cal-head"><div class="cal-title">' + y + ' 年 ' + (m + 1) + ' 月</div>'
-    + '<div class="cal-nav"><button data-mv="-1">‹</button><button data-mv="1">›</button></div></div>'
+    + '<div class="cal-nav"><button class="now" data-today="1" title="回到今天">今天</button><button data-mv="-1">‹</button><button data-mv="1">›</button></div></div>'
     + '<div class="cal-grid">' + ["日","一","二","三","四","五","六"].map(function(w){ return '<div class="cal-w">' + w + '</div>'; }).join("");
   for (var i = 0; i < start; i++) html += '<div class="cal-d"></div>';
   for (var d = 1; d <= days; d++){
     var key = y + "-" + calPrefix(m + 1) + "-" + calPrefix(d);
     var c = counts[key] || 0;
-    var cls = "cal-d" + (c ? " has" : "") + (key === noteDay ? " on" : "");
+    var cls = "cal-d" + (c ? " has" : "") + (key === noteDay ? " on" : "") + (key === todayKey ? " today" : "");
     html += '<div class="' + cls + '" data-day="' + (c ? key : "") + '" title="' + (c ? c + " 篇笔记" : "") + '">' + d
       + (c ? '<span class="dot"></span>' : '') + '</div>';
   }
@@ -1131,6 +1134,13 @@ function bind(){
   document.addEventListener("click", function(e){
     var box = e.target.closest ? e.target.closest("#cal") : null;
     if (!box) return;
+    var nowBtn = e.target.closest(".cal-nav button[data-today]");
+    if (nowBtn){
+      var tn = new Date();
+      calRef = new Date(tn.getFullYear(), tn.getMonth(), 1);
+      noteDay = "";
+      renderCal(); renderNotes(); return;
+    }
     var nav = e.target.closest(".cal-nav button");
     if (nav){
       calRef = new Date(calRef.getFullYear(), calRef.getMonth() + Number(nav.getAttribute("data-mv")), 1);
