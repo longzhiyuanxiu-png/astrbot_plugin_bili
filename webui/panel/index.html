@@ -72,8 +72,12 @@ a{color:var(--accent2);text-decoration:none}
 .btn.ghost{background:transparent}
 .btn.on{border-color:var(--ok);color:var(--ok)}
 .btn[disabled]{opacity:.55;cursor:default;transform:none}
-.btn .spin{width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;display:none}
+.btn .spin{width:14px;height:14px;border:2px solid rgba(47,109,246,.22);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:none;margin-right:1px}
+.btn.primary .spin{border-color:rgba(255,255,255,.35);border-top-color:#fff}
 .btn.busy .spin{display:inline-block}
+.btn.busy{color:var(--accent);border-color:var(--accent);background:rgba(47,109,246,.06)}
+.btn.busy.primary{color:#fff;background:linear-gradient(135deg,#2f6df6,#5b8cff 70%,#7ea6ff)}
+.btn[disabled]{opacity:.8;cursor:default}
 @keyframes spin{to{transform:rotate(360deg)}}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
 .kpi{position:relative;background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
@@ -501,7 +505,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
         </div>
         <span class="sep"></span>
         <button class="btn primary" id="btnRun"><span class="spin"></span>喂她一个视频</button>
-        <button class="btn" id="btnReload"><span class="spin"></span>刷新</button>
+        <button class="btn" id="btnReload"><span class="spin"></span><span class="lb">刷新</span></button>
         <button class="btn ghost" id="btnSound" title="点她时的小声音">音效关</button>
         <button class="btn ghost" id="btnAuto">自动刷新：开</button>
       </div>
@@ -1096,10 +1100,19 @@ function bind(){
     finally{ setTimeout(function(){ b.disabled = false; b.classList.remove("busy"); }, 1500); }
   });
   $("btnReload").addEventListener("click", async function(){
-    var b = $("btnReload"); b.classList.add("busy");
-    try{ await refresh(true); loadHistory(); toast("已刷新"); }
-    catch(e){ toast("失败：" + e); }
-    finally{ setTimeout(function(){ b.classList.remove("busy"); }, 400); }
+    var b = $("btnReload"), lb = b.querySelector(".lb");
+    if (b.classList.contains("busy")) return;
+    b.classList.add("busy"); b.disabled = true; lb.textContent = "刷新中";
+    var t0 = Date.now();
+    try{ await refresh(true); loadHistory(); }
+    catch(e){ toast("刷新失败：" + e); }
+    finally{
+      var wait = Math.max(0, 600 - (Date.now() - t0));
+      setTimeout(function(){
+        b.classList.remove("busy"); b.disabled = false; lb.textContent = "刷新";
+        toast("已刷新");
+      }, wait);
+    }
   });
   $("btnAuto").addEventListener("click", function(){ autoOn = !autoOn; applyAuto(); });
   $("notes").addEventListener("click", function(e){
