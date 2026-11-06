@@ -845,6 +845,7 @@ class Learner:
             )
         return (
             NOTE_PROMPT.format(
+                name=self.persona,
                 title=info.get("title") or "",
                 owner=info.get("owner") or "",
                 duration=info.get("duration") or 0,
