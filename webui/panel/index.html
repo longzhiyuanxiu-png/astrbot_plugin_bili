@@ -328,6 +328,9 @@ body{background-attachment:fixed}
 .cal-mpick:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,109,246,.12)}
 .cal-nav button.now:hover{background:rgba(47,109,246,.08)}
 .cal-d.today{box-shadow:inset 0 0 0 1.5px rgba(47,109,246,.55)}
+.cal-d{position:relative}
+.cal-d .cnt{position:absolute;left:0;right:0;bottom:3px;text-align:center;font-size:9.5px;line-height:1;font-weight:700;color:rgba(47,109,246,.8);letter-spacing:0}
+.cal-d.has{padding-bottom:9px}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .cal-w{font-size:12.5px;font-weight:600;color:var(--muted);text-align:center;padding:4px 0 6px}
 .cal-d{position:relative;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--text2);cursor:default;border:1px solid transparent}
@@ -1051,7 +1054,7 @@ function renderCal(){
     var c = counts[key] || 0;
     var cls = "cal-d" + (c ? " has" : "") + (key === noteDay ? " on" : "") + (key === todayKey ? " today" : "");
     html += '<div class="' + cls + '" data-day="' + (c ? key : "") + '" title="' + (c ? c + " 篇笔记" : "") + '">' + d
-      + (c ? '<span class="dot"></span>' : '') + '</div>';
+      + (c ? '<span class="cnt">' + c + '</span>' : '') + '</div>';
   }
   html += '</div><div class="cal-foot"><span>有笔记的日子可以点，点第二次取消</span>'
     + (noteDay ? '<button class="cal-clear" data-clear="1">清除筛选</button>' : '')
