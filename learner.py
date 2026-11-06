@@ -936,7 +936,9 @@ class Learner:
         if raw_title and raw_title != str(note.get("title") or ""):
             lines.append(f"- 视频：{raw_title}")
         lines += [
-            f"- UP主：{info.get('owner')}",
+            "- UP主："
+            + str(info.get("owner") or "—")
+            + (f"（UID {info.get('owner_mid')}）" if info.get("owner_mid") else ""),
             f"- 链接：https://www.bilibili.com/video/{info.get('bvid')}",
             f"- 发布：{_pub(info)}",
             f"- 数据：时长 {_dur(info.get('duration'))}　播放 {_cnt(info.get('view'))}　点赞 {_cnt(info.get('like'))}",
