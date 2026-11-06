@@ -1,0 +1,492 @@
+{
+  "basic": {
+    "type": "object",
+    "description": "基础",
+    "hint": "总开关、谁能发指令、试运行",
+    "items": {
+      "bot_name": {
+        "type": "string",
+        "description": "她的名字",
+        "hint": "给她起个名字，写笔记、日报抬头、索引标题都用它。\n随便填，中文英文都行（默认「小助手」）。",
+        "default": "小助手"
+      },
+      "panel_title": {
+        "type": "string",
+        "description": "面板左上角显示的名字",
+        "hint": "留空则用「她的名字」；这里可以写她在群里叫的名字",
+        "default": ""
+      },
+      "panel_subtitle": {
+        "type": "string",
+        "description": "面板名字下面那行小字",
+        "hint": "留空则显示「B站学习面板」；可以写成「XX的学习面板」",
+        "default": ""
+      },
+      "memory_persona": {
+        "type": "string",
+        "description": "写长期记忆时用的 persona",
+        "hint": "长期记忆插件（livingmemory）里的人格 ID，写在那个插件的配置里。\n只有一个助手时留空即可（落到 default）；养了多个人格时，去「插件 → 长期记忆 → 配置」看 persona_id，原样填进来。",
+        "default": ""
+      },
+      "hf_endpoint": {
+        "type": "string",
+        "description": "HuggingFace 镜像地址",
+        "hint": "留空不改环境；国内下载 whisper 模型可填 https://hf-mirror.com",
+        "default": ""
+      },
+      "cookie_path": {
+        "type": "string",
+        "description": "B站登录 cookie 文件路径",
+        "hint": "推荐扫码：直接发 /bili 登录，扫完自动存到下面这个路径。\n手动也行：浏览器登录 B站 → F12 → Application/Cookies，取 SESSDATA、bili_jct、DedeUserID、buvid3 四个字段，\n写成 JSON 存成文件：{\"SESSDATA\":\"...\",\"bili_jct\":\"...\",\"DedeUserID\":\"...\",\"buvid3\":\"...\"}\n留空则用插件目录下的 bili-cookie.json。",
+        "default": ""
+      },
+      "deepseek_key_path": {
+        "type": "string",
+        "description": "DeepSeek key 文件路径（用于查余额）",
+        "hint": "只用于面板显示余额，不填也能正常学习。\n获取：登录 platform.deepseek.com → API keys → 创建 → 复制 sk- 开头那串，粘到一个 txt 文件里，把路径填这里。\n留空则找插件目录下的 deepseek-key.txt。",
+        "default": ""
+      },
+      "enabled": {
+        "type": "bool",
+        "description": "启用插件",
+        "default": true,
+        "hint": "关掉之后她完全不学，也不会发任何汇报"
+      },
+      "dry_run": {
+        "type": "bool",
+        "description": "试运行（只看不互动）",
+        "default": true,
+        "hint": "打开后只学、只写笔记，绝不点赞/投币/收藏/发私信；确认没问题再关掉"
+      },
+      "admin_ids": {
+        "type": "list",
+        "description": "谁可以发 /bili 指令",
+        "default": [],
+        "hint": "填 QQ 号，多个用逗号隔开；留空就跟随 AstrBot 的管理员设置"
+      },
+      "panel_web_enabled": {
+        "type": "bool",
+        "description": "开独立面板网页",
+        "default": true,
+        "hint": "打开后可以用浏览器直接看面板（不依赖 AstrBot 后台，久开也不卡）"
+      },
+      "panel_web_port": {
+        "type": "int",
+        "description": "独立面板端口",
+        "default": 4123,
+        "hint": "浏览器访问 http://127.0.0.1:端口；端口冲突就换一个"
+      }
+    }
+  },
+  "schedule": {
+    "type": "object",
+    "description": "学习节奏",
+    "hint": "每天学几个、什么时候学、学多长的视频",
+    "items": {
+      "runs_per_day": {
+        "type": "int",
+        "description": "每天最多学几个视频",
+        "default": 2,
+        "hint": "学够这个数量就收工；收工后再等一会儿发当天汇总"
+      },
+      "time_windows": {
+        "type": "string",
+        "description": "在哪些时段学习",
+        "default": "15:00-16:30,20:30-22:00",
+        "hint": "例如 12:30-22:00；多个时段用逗号隔开；进入时段就立刻开一轮，跑满再排下一轮"
+      },
+      "min_gap_minutes": {
+        "type": "int",
+        "description": "两轮之间至少隔几分钟",
+        "default": 120,
+        "hint": "防止连着学；设 1 就是学完歇 1 分钟接着学"
+      },
+      "quiet_hours": {
+        "type": "string",
+        "description": "免打扰时段",
+        "default": "23:30-08:00",
+        "hint": "例如 23:30-08:00；这段时间不学习也不推送，留空表示不限制"
+      },
+      "min_video_minutes": {
+        "type": "int",
+        "description": "视频最短几分钟",
+        "default": 2,
+        "hint": "太短的不看（切片、预告、十几秒的梗）"
+      },
+      "max_video_minutes": {
+        "type": "int",
+        "description": "视频最长几分钟",
+        "default": 30,
+        "hint": "太长的不看（直播回放、超长合集）；转写很慢，别设太高"
+      },
+      "daily_token_budget": {
+        "type": "int",
+        "description": "每天 token 上限",
+        "default": 150000,
+        "hint": "0 = 不限制；填了就用到量为止（约 1000 token ≈ 0.001 元）"
+      }
+    }
+  },
+  "topic": {
+    "type": "object",
+    "description": "选题与兴趣",
+    "hint": "她看什么、怎么挑，兴趣怎么长",
+    "items": {
+      "interest_topics": {
+        "type": "list",
+        "description": "兴趣种子（可随手改权重）",
+        "default": [
+          "动漫 2.00",
+          "音乐 2.00"
+        ],
+        "hint": "格式「词 权重」，例如「动画杂谈 3.0」；权重越高越常被抽到；她每学完一轮会把当前权重写回这里"
+      },
+      "extra_interests": {
+        "type": "list",
+        "description": "兴趣拓展（她自己长出来的）",
+        "default": [],
+        "hint": "自动维护，格式「词 权重」；看不顺眼的直接删掉，她就不再看这个方向"
+      },
+      "extra_interest_min_hits": {
+        "description": "新兴趣要连续出现几次才收录",
+        "type": "int",
+        "default": 3,
+        "hint": "默认 3：同一个标签连续出现在 3 篇笔记里，才写进兴趣拓展，防止被一个跑偏视频带歪"
+      },
+      "auto_expand_interest": {
+        "type": "bool",
+        "description": "自动长出新的兴趣",
+        "default": true,
+        "hint": "关掉后兴趣池只保留你手写的种子，不再自动添新方向"
+      },
+      "only_interest_videos": {
+        "type": "bool",
+        "description": "只学感兴趣的视频",
+        "default": false,
+        "hint": "打开后跑题的直接跳过（最多连换 3 个）；关掉则允许跑题，但不会点赞收藏、笔记也只记一行"
+      },
+      "follow_series": {
+        "type": "bool",
+        "description": "追合集",
+        "default": true,
+        "hint": "学到合集里的某一集，下一轮优先接着看下一集"
+      },
+      "prefer_up_list": {
+        "type": "list",
+        "description": "优先看的 UP 主",
+        "default": [],
+        "hint": "填 UP 的 UID（空间地址里那串数字）或名字都行，多个用逗号或回车隔开；优先从他们的投稿里挑。"
+      },
+      "blocked_upowners": {
+        "type": "list",
+        "description": "不看的 UP 主",
+        "hint": "填 UP 的 UID（数字）或名字都行，多个用逗号或回车隔开；命中就跳过，你自己点名的视频不受影响。",
+        "default": []
+      },
+      "block_keywords": {
+        "type": "list",
+        "description": "内容黑名单（标题或简介命中就跳过）",
+        "default": [
+          "恐怖",
+          "擦边",
+          "猎奇"
+        ],
+        "hint": "例如：恐怖、擦边、猎奇、解压视频"
+      },
+      "title_block_keywords": {
+        "description": "标题黑名单（挡形态）",
+        "type": "list",
+        "default": [
+          "合集",
+          "MV",
+          "纯音乐",
+          "剪辑",
+          "搬运",
+          "混剪",
+          "reaction"
+        ],
+        "hint": "挡掉「合集 / MV / 纯音乐 / 剪辑 / 搬运 / 混剪 / reaction」这类信息量低的视频"
+      },
+      "keyword_cooldown_hours": {
+        "description": "关键词歇口气的时长（小时）",
+        "type": "int",
+        "default": 2,
+        "hint": "某个兴趣词连续两轮都搜不到合适的视频，就让它歇这么久；种子词永远不歇"
+      },
+      "explore_every_n_rounds": {
+        "type": "int",
+        "description": "每多少轮安排一次弱兴趣探索（0 = 关闭）",
+        "hint": "到点那一轮会优先从低分兴趣里抽词，避免高分兴趣长期霸屏；默认 5 轮一次",
+        "default": 5
+      },
+      "explore_max_weight": {
+        "type": "float",
+        "description": "探索轮只从权重不高于这个值的兴趣里抽",
+        "hint": "默认 2.5；调低=只在更弱的兴趣里探索，调高=探索范围更宽",
+        "default": 2.5
+      }
+    }
+  },
+  "content": {
+    "type": "object",
+    "description": "内容处理",
+    "hint": "字幕、语音转写、弹幕、热评",
+    "items": {
+      "transcribe_first": {
+        "type": "bool",
+        "title": "完全不用B站字幕",
+        "description": "不用 B 站字幕，一律自己听",
+        "hint": "B 站字幕经常挂到别的视频上；打开后每条都自己转写，更准，但每条多花二三十秒",
+        "default": false
+      },
+      "subtitle_min_sim": {
+        "type": "float",
+        "title": "字幕可信度阈值",
+        "description": "字幕可信度阈值",
+        "hint": "拿开头 45 秒的语音跟字幕对一遍，重合度低于这个值就判定串台、丢掉字幕改用转写；正常约 0.98，串台约 0.0~0.08，建议 0.6",
+        "default": 0.6
+      },
+      "enable_transcribe": {
+        "type": "bool",
+        "description": "没有字幕时用语音转写",
+        "default": false,
+        "hint": "需要本地的 faster-whisper 模型；慢，但没字幕也看得懂"
+      },
+      "whisper_model": {
+        "type": "string",
+        "description": "转写模型",
+        "default": "small",
+        "hint": "可以填名字（tiny / small / medium），也可以填模型目录的绝对路径；本机现在用的是 medium"
+      },
+      "max_transcribe_minutes": {
+        "type": "int",
+        "description": "最多转写多长的视频（分钟）",
+        "default": 15,
+        "hint": "超过就不转写、直接跳过；转写很吃 CPU，不建议调太高"
+      },
+      "whisper_threads": {
+        "type": "int",
+        "description": "转写用几个 CPU 线程（0=自动，约核数的四分之一，最多 8 个）",
+        "hint": "0=自动（CPU 核数的一半，最多 16 线程）；机器好可以直接填 16、24、32",
+        "default": 0
+      },
+      "precheck_speech": {
+        "description": "转写前先听 60 秒",
+        "type": "bool",
+        "default": true,
+        "hint": "开头一分钟几乎没人说话（纯音乐、无声演示）就直接跳过，省下几分钟"
+      },
+      "min_content_chars": {
+        "description": "至少要有多少字可读",
+        "type": "int",
+        "default": 300,
+        "hint": "字幕加转写不到这个字数就换视频；纯音乐、无人声 MV 会在这里被挡掉"
+      },
+      "explore_min_content_chars": {
+        "type": "int",
+        "description": "探索轮的内容门槛（字）",
+        "hint": "探索轮抽中的弱兴趣词，读到这么多字就算数，给歌单/音乐类留口子；普通视频仍用上面那条",
+        "default": 120
+      },
+      "whisper_cache_dir": {
+        "type": "string",
+        "description": "模型和临时文件放哪",
+        "default": "",
+        "hint": "留空则用 ~/.cache/bili_whisper"
+      },
+      "ffmpeg_path": {
+        "type": "string",
+        "description": "ffmpeg 在哪",
+        "default": "ffmpeg",
+        "hint": "留空或填 ffmpeg 表示用 PATH 里的 ffmpeg"
+      },
+      "danmaku_enabled": {
+        "type": "bool",
+        "description": "采集弹幕",
+        "default": true,
+        "hint": "弹幕能反映观众反应，写笔记时更有网感"
+      },
+      "danmaku_sample": {
+        "type": "int",
+        "description": "采样多少条弹幕",
+        "default": 400,
+        "hint": "默认 1000；越多越慢，一般 500~1000 够用"
+      },
+      "comments_enabled": {
+        "type": "bool",
+        "description": "采集热评",
+        "default": true,
+        "hint": "热评经常比视频本身还有意思"
+      },
+      "comments_top_n": {
+        "type": "int",
+        "description": "取前几条热评",
+        "default": 20,
+        "hint": "默认 30"
+      }
+    }
+  },
+  "action": {
+    "type": "object",
+    "description": "互动动作",
+    "hint": "点赞、投币、收藏的开关和每日限额",
+    "items": {
+      "allow_like": {
+        "type": "bool",
+        "description": "允许点赞",
+        "default": true,
+        "hint": "只对「跟兴趣搭」的视频生效"
+      },
+      "like_daily_limit": {
+        "type": "int",
+        "description": "每天最多点几个赞",
+        "default": 5,
+        "hint": "默认 5"
+      },
+      "allow_coin": {
+        "type": "bool",
+        "description": "允许投币",
+        "default": false,
+        "hint": "硬币有限，默认关"
+      },
+      "coin_daily_limit": {
+        "type": "int",
+        "description": "每天最多投几个币",
+        "default": 1,
+        "hint": "默认 2"
+      },
+      "allow_fav": {
+        "type": "bool",
+        "description": "允许收藏",
+        "default": true,
+        "hint": "收藏会进下面指定的收藏夹"
+      },
+      "fav_daily_limit": {
+        "type": "int",
+        "description": "每天最多收藏几个",
+        "default": 2,
+        "hint": "默认 2"
+      },
+      "fav_folder_name": {
+        "type": "string",
+        "description": "收藏到哪个收藏夹",
+        "default": "默认收藏夹",
+        "hint": "填收藏夹名字，例如「大肥鱼的学习」；找不到就用第一个"
+      },
+      "action_min_interval_sec": {
+        "type": "int",
+        "description": "两个动作之间至少隔几秒",
+        "default": 10,
+        "hint": "防止操作过快被风控，默认 5"
+      }
+    }
+  },
+  "share": {
+    "type": "object",
+    "description": "分享与汇报",
+    "hint": "B站私信、QQ文字、语音，三条线各自开关",
+    "items": {
+      "share_qq": {
+        "type": "bool",
+        "description": "QQ 文字汇报",
+        "default": true,
+        "hint": "关掉就是只学不说话；B站私信和语音不受影响"
+      },
+      "share_voice": {
+        "type": "bool",
+        "description": "语音汇报",
+        "default": false,
+        "hint": "需要 TTS；把汇报念成语音发给你"
+      },
+      "voice_max_chars": {
+        "type": "int",
+        "description": "语音最多念几个字",
+        "default": 120,
+        "hint": "太长了会很慢，建议 120 以内"
+      },
+      "report_mode": {
+        "type": "string",
+        "description": "汇报节奏",
+        "hint": "日报 = 平时不打扰，收工后发一条汇总；即时 = 每学完一个就说一次",
+        "options": [
+          "daily",
+          "instant"
+        ],
+        "default": "daily"
+      },
+      "report_after_minutes": {
+        "type": "int",
+        "description": "收工后多久发汇总（分钟）",
+        "hint": "今天配额跑满或时段结束后，再等这么久把当天汇总发给你",
+        "default": 60
+      },
+      "daily_report_time": {
+        "type": "string",
+        "description": "固定时间兜底（可留空）",
+        "hint": "留空 = 只按「收工后」发；填 22:00 这类时间，到点也会补发一次",
+        "default": ""
+      },
+      "share_dm": {
+        "type": "bool",
+        "description": "B站私信分享",
+        "default": false,
+        "hint": "把她看过的视频用 B 站私信发给你"
+      },
+      "bili_dm_target": {
+        "type": "string",
+        "description": "私信发给谁（B站 UID）",
+        "default": "",
+        "hint": "你 B站大号的 UID（数字，不是 QQ 号）。\n获取：打开自己的 B站主页，地址栏 space.bilibili.com/ 后面那串数字就是（例：space.bilibili.com/123456789 → 填 123456789）。\n注意：要和她的小号先互相关注，否则私信会进「陌生人消息」，你不会收到提醒。"
+      },
+      "bili_dm_daily_limit": {
+        "type": "int",
+        "description": "每天最多发几条私信",
+        "default": 5,
+        "hint": "发太多容易被风控，默认 10"
+      },
+      "share_dm_only_interest": {
+        "description": "只分享感兴趣的视频",
+        "type": "bool",
+        "default": false,
+        "hint": "关着就是「我看了什么都告诉你」；打开后跑题的不发私信"
+      },
+      "ask_in_report": {
+        "type": "bool",
+        "description": "汇报结尾问一句",
+        "default": true,
+        "hint": "打开后她会问「要不要我给你细讲某一点」，方便你接话"
+      },
+      "weekly_report": {
+        "type": "bool",
+        "description": "每周来个小结",
+        "default": true,
+        "hint": "统计这周看了些什么、最常看的主题"
+      }
+    }
+  },
+  "notes": {
+    "type": "object",
+    "description": "笔记与记忆",
+    "hint": "笔记存在哪、要不要写进长期记忆",
+    "items": {
+      "notes_dir": {
+        "type": "string",
+        "description": "笔记存在哪",
+        "default": "",
+        "hint": "留空则放在插件目录下的 notes/；已有笔记可指向原目录"
+      },
+      "memory_write": {
+        "type": "bool",
+        "description": "把笔记写进长期记忆",
+        "default": true,
+        "hint": "关掉就是只写文件，不进记忆库"
+      },
+      "memory_per_note": {
+        "type": "int",
+        "description": "每篇笔记存几段记忆",
+        "default": 3,
+        "hint": "默认 3；太多会稀释记忆库"
+      }
+    }
+  }
+}
