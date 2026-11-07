@@ -332,6 +332,72 @@ class BiliLearningPlugin(Star):
         except Exception:
             return ""
 
+    # ---------------- 面板内扫码登录
+    def _qr_png(self, url: str) -> str:
+        try:
+            import io as _io, base64 as _b64
+            import qrcode  # type: ignore
+            img = qrcode.make(url)
+            buf = _io.BytesIO()
+            img.save(buf, format="PNG")
+            return "data:image/png;base64," + _b64.b64encode(buf.getvalue()).decode()
+        except Exception:
+            return ""
+
+    async def _qr_watch(self, qrcode_key: str) -> None:
+        for _ in range(150):
+            await asyncio.sleep(2)
+            if not self._busy_token_active():
+                pass
+            try:
+                r = await self.api.qr_poll(qrcode_key)
+            except Exception as e:
+                self._qr_state = {"status": "error", "msg": f"查询扫码状态出错：{e}"}
+                return
+            code = r.get("code")
+            if code == 0:
+                info = await self.api.login_with_cookies(r.get("cookies") or {})
+                if info.get("is_login"):
+                    self._qr_state = {"status": "ok", "msg": "登录成功", "uname": info.get("uname", "")}
+                    logger.info(f"[bili] 面板扫码登录成功：{info.get('uname')}")
+                else:
+                    self._qr_state = {"status": "error", "msg": "拿到 cookie 但校验没通过，再扫一次试试"}
+                return
+            if code == 86038:
+                self._qr_state = {"status": "expired", "msg": "二维码过期了，点「重新生成」"}
+                return
+            if code == 86090:
+                self._qr_state = {"status": "scanned", "msg": "扫到了，在手机上点确认"}
+            else:
+                self._qr_state = {"status": "scanning", "msg": "用手机 B站 App 扫这个码"}
+
+    def _busy_token_active(self) -> bool:
+        return False
+
+    async def _panel_login_qr(self, payload=None, **_kw):
+        """生成二维码，并在后台轮询扫码结果。"""
+        if getattr(self.api, "logged_in", False):
+            return {"ok": True, "logged_in": True, "uname": getattr(self.api, "uname", "")}
+        try:
+            q = await self.api.qr_generate()
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        png = self._qr_png(q["url"])
+        self._qr_state = {"status": "scanning", "msg": "用手机 B站 App 扫这个码", "at": int(time.time())}
+        try:
+            asyncio.create_task(self._qr_watch(q["qrcode_key"]))
+        except Exception:
+            pass
+        return {"ok": True, "qr": png, "logged_in": False}
+
+    async def _panel_login_status(self, payload=None, **_kw):
+        st = getattr(self, "_qr_state", None) or {"status": "idle", "msg": ""}
+        return {
+            "logged_in": bool(getattr(self.api, "logged_in", False)),
+            "uname": getattr(self.api, "uname", ""),
+            "state": st,
+        }
+
     def _panel_schedule_info(self) -> Dict[str, Any]:
         """给面板顶部倒计时用：下一次自动学习时间 + 当前调度状态（与 _tick 口径一致）。"""
         info: Dict[str, Any] = {"state": "waiting", "at": 0, "hint": ""}
