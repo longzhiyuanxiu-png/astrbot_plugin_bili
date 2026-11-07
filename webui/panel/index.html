@@ -587,10 +587,10 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
         <div class="search"><span style="color:var(--muted)">🔍</span><input id="q" placeholder="搜标题、标签…" autocomplete="off"></div>
         <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
           <button class="btn ghost" id="btnTrash" type="button">🗑 回收站<span id="trashN" style="color:var(--muted);margin-left:6px"></span></button>
-          <span class="hint" style="color:var(--muted);font-size:13px">删掉的笔记先放这里，可恢复或彻底删除</span>
+          <span style="color:var(--muted);font-size:13px">删掉的笔记先放这里，可恢复或彻底删除</span>
         </div>
         <div id="trashList" style="display:none;margin-top:12px;max-height:46vh;overflow:auto"></div>
-        <div class="notewrap">
+                <div class="notewrap">
           <div class="cal" id="cal"></div>
           <div class="notes" id="notes"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
         </div>
@@ -770,6 +770,10 @@ function toggleTrash(){
   box.style.display = on ? "none" : "block";
   if (!on) loadTrash();
 }
+(function(){
+  var b = document.getElementById("btnTrash");
+  if (b) b.onclick = toggleTrash;
+})();
 function nfmt(n){
   n = Number(n || 0);
   if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,"") + "M";
