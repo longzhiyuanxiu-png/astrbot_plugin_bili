@@ -34,7 +34,7 @@
         "default": true,
         "hint": "关掉之后她完全不学，也不会发任何汇报"
       },
-      "admin_ids": {
+"admin_ids": {
         "type": "list",
         "description": "谁可以发 /bili 指令",
         "default": [],

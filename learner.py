@@ -676,7 +676,9 @@ class Learner:
             logger.warning(f"[bili] 音轨下载全部失败: {'; '.join(str(e) for e in errors[:4])}")
             return "", f"下载音轨失败（{len(errors)} 个 CDN 都不通）"
 
+        loop = asyncio.get_running_loop()
         ff = str(self.config.get("ffmpeg_path") or "ffmpeg")
+        wav_ready = False
         try:
             cmd = [ff, "-y", "-i", str(raw), "-ar", "16000", "-ac", "1"]
             if limit_sec:
@@ -689,18 +691,22 @@ class Learner:
                 timeout=900,
                 check=False,
             )
+            wav_ready = wav.exists() and wav.stat().st_size >= 2048
+        except FileNotFoundError:
+            logger.info("[bili] 没找到 ffmpeg，改用自带解码器（PyAV）")
         except Exception as exc:
-            logger.warning(f"[bili] ffmpeg 转码失败: {exc!r}")
-            return "", f"ffmpeg 转码失败: {exc!r}"
-        if not wav.exists() or wav.stat().st_size < 2048:
-            logger.warning("[bili] 转码后的音频文件异常")
-            return "", "转码后的音频文件异常"
+            logger.warning(f"[bili] ffmpeg 转码失败（{type(exc).__name__}），改用自带解码器（PyAV）")
 
-        loop = asyncio.get_running_loop()
         try:
-            text = await loop.run_in_executor(
-                None, self._whisper_sync, str(wav), hint
-            )
+            if wav_ready:
+                text = await loop.run_in_executor(None, self._whisper_sync, str(wav), hint)
+            else:
+                audio = await loop.run_in_executor(
+                    None, self._decode_with_av, str(raw), int(limit_sec or 0)
+                )
+                if audio is None or len(audio) < 8000:
+                    return "", "没有 ffmpeg，自带解码也失败（装个 ffmpeg 更稳）"
+                text = await loop.run_in_executor(None, self._whisper_array, audio, hint)
         except Exception as exc:
             logger.warning(f"[bili] 语音转写失败: {exc!r}")
             return "", f"语音转写失败: {exc!r}"
@@ -829,6 +835,42 @@ class Learner:
         except Exception as exc:
             logger.warning(f"[bili] 读取音频失败: {exc!r}")
             return ""
+        return self._whisper_array(audio, hint)
+
+    @staticmethod
+    def _decode_with_av(path: str, limit_sec: int = 0):
+        """没有 ffmpeg 时的兜底：用 PyAV 直接解 16k 单声道 float32。失败返回 None。"""
+        try:
+            import av
+            import numpy as np
+
+            chunks = []
+            with av.open(path) as container:
+                stream = next((x for x in container.streams if x.type == "audio"), None)
+                if stream is None:
+                    return None
+                resampler = av.AudioResampler(format="flt", layout="mono", rate=16000)
+                total = 0
+                for frame in container.decode(stream):
+                    for rf in resampler.resample(frame):
+                        arr = rf.to_ndarray().reshape(-1)
+                        chunks.append(arr)
+                        total += arr.size
+                        if limit_sec and total >= 16000 * limit_sec:
+                            break
+                    if limit_sec and total >= 16000 * limit_sec:
+                        break
+            if not chunks:
+                return None
+            audio = np.concatenate(chunks).astype("float32")
+            if limit_sec:
+                audio = audio[: 16000 * limit_sec]
+            return audio
+        except Exception as exc:
+            logger.warning(f"[bili] PyAV 解码失败: {exc!r}")
+            return None
+
+    def _whisper_array(self, audio, hint: str = "") -> str:
         model = self._get_whisper_model()
         if model is None:
             return ""
