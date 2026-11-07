@@ -1110,6 +1110,7 @@ function cleanTags(list){
     .filter(function(t){ return t && !/^[（(]?无[）)]?$/.test(t) && t !== "-" && t !== "—"; });
 }
 var NOTE_PAGE = 60, notePage = 1, notePageSig = "";
+(function(){var m=/[?&]pg=(\d+)/.exec(location.search); if(m){ window.__pgOnce=Math.max(1,parseInt(m[1],10)); }})();
 function renderNotes(){
   var nowSec = Math.floor(Date.now() / 1000);
   var today0 = new Date(); today0.setHours(0, 0, 0, 0);
@@ -1126,6 +1127,7 @@ function renderNotes(){
   var sig = String(query || "") + "|" + String(noteDay || "");
   if (sig !== notePageSig){ notePageSig = sig; notePage = 1; }
   var pages = Math.max(1, Math.ceil(list.length / NOTE_PAGE));
+  if (window.__pgOnce){ notePage = Math.min(window.__pgOnce, pages); notePageSig = sig; window.__pgOnce = 0; }
   if (notePage > pages) notePage = pages;
   var pageStart = (notePage - 1) * NOTE_PAGE;
   $("noteCount").textContent = list.length + " / " + notes.length + " 篇";
