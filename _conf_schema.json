@@ -493,12 +493,6 @@
         "description": "汇报结尾问一句",
         "default": true,
         "hint": "打开后她会问「要不要我给你细讲某一点」，方便你接话"
-      },
-      "weekly_report": {
-        "type": "bool",
-        "description": "每周来个小结",
-        "default": true,
-        "hint": "统计这周看了些什么、最常看的主题"
       }
     }
   },

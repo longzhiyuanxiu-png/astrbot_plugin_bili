@@ -1958,9 +1958,6 @@ class BiliLearningPlugin(Star):
         if sub in ("笔记", "notes", "note", "找笔记"):
             yield event.plain_result(self._cmd_notes(arg))
             return
-        if sub in ("周报", "weekly"):
-            yield event.plain_result(self._cmd_weekly())
-            return
         if sub in ("复习", "review", "考考我"):
             async for r in self._cmd_review(event):
                 yield r
@@ -3037,6 +3034,18 @@ class BiliLearningPlugin(Star):
                 await event.send(event.plain_result(self._build_daily_report(limit=999)))
             except Exception as exc:
                 logger.warning(f"[bili] 发文字清单失败: {exc!r}")
+        # 记下这次汇报的清单，方便主人接着问「那条」「第 N 条」时对得上
+        try:
+            _tag = datetime.now().strftime("%Y%m%d")
+            _items = [
+                {"title": fp.stem.split("_", 1)[-1], "name": fp.name}
+                for fp in self._notes_files()
+                if fp.name != "index.md" and fp.stem.startswith(_tag)
+            ]
+            self.state["last_daily"] = {"date": _tag, "items": _items}
+            self._save_state()
+        except Exception as exc:
+            logger.debug(f"[bili] 记录日报清单失败: {exc!r}")
 
     async def _cmd_daily(
         self, event: AstrMessageEvent, arg: str = ""
@@ -3121,8 +3130,7 @@ class BiliLearningPlugin(Star):
             "/bili 日志 [条数]\n"
             "/bili 笔记 [关键词] · 翻旧笔记\n"
             "/bili 报告 [天数] · 最近的学习统计\n"
-            "/bili 周报 · 这周学了啥\n"
-            "/bili 复习 · 抽一篇旧笔记考考你\n"
+                "/bili 复习 · 抽一篇旧笔记考考你\n"
             "/bili 索引 · 重建笔记索引（notes/index.md）\n"
             "/bili 私信 [内容] · 不带内容就把最近看过的视频分享到你B站私信\n"
             "/bili 退出登录 · 清掉本地登录态\n"
@@ -3172,6 +3180,21 @@ class BiliLearningPlugin(Star):
         files = [p for p in files if p.name != "index.md"]
         _tag = datetime.now().strftime("%Y%m%d")
         _todays = [fp for fp in files if fp.stem.startswith(_tag)]
+        _last = self.state.get("last_daily") or {}
+        _last_items = list(_last.get("items") or []) if _last.get("date") == _tag else []
+        if q in ("那条", "那一条", "这条", "这个", "它", "那篇", "刚才那条", "刚刚那条", "上面那条", "刚说的", "刚才说的"):
+            if len(_last_items) == 1:
+                q = str(_last_items[0].get("title") or "").lower()
+            elif _last_items:
+                lines = ["刚才汇报的那几条（按时间倒序）："]
+                for _i, _it in enumerate(_last_items[:30], 1):
+                    lines.append(f"{_i}. {_it.get('title')}")
+                lines.append("说「第 N 条」并让我讲，我就把那篇正文取出来")
+                return "\n".join(lines)
+            elif _todays:
+                q = ""
+            else:
+                return "刚才那条我这边对不上号了，说个关键词或「第 N 条」吧。"
         m_idx = re.fullmatch(r"第?\s*([0-9]{1,3})\s*条?", q)
         if m_idx:
             _n = int(m_idx.group(1))
@@ -3326,47 +3349,6 @@ class BiliLearningPlugin(Star):
         self._log("用B站私信发了一条消息")
         yield event.plain_result("发到B站私信里了，去看一眼？")
 
-    def _cmd_weekly(self) -> str:
-        """每周小结：这周看了什么、绕不开的主题。"""
-        files = self._notes_files()
-        if not files:
-            return "还没有笔记，周报要等我看几个视频之后才能写。"
-        cutoff = time.time() - 7 * 86400
-        recent = [p for p in files if p.stat().st_mtime >= cutoff]
-        if not recent:
-            return "这周还没看新东西呢，发 /bili 学 让我去看一个？"
-        tags: Dict[str, int] = {}
-        items: List[str] = []
-        chars = 0
-        for p in recent[:30]:
-            try:
-                text = p.read_text(encoding="utf-8")
-            except Exception:
-                continue
-            chars += len(text)
-            title = p.stem.split("_", 1)[-1]
-            one = ""
-            for line in text.splitlines():
-                s = line.strip()
-                if s.startswith("- 标签："):
-                    for t in re.split(r"[、,，]", s[5:]):
-                        t = t.strip()
-                        if t and t != "（无）":
-                            tags[t] = tags.get(t, 0) + 1
-                elif s and not s.startswith(("#", "-", ">", "|", "*")) and not one:
-                    one = s[:70]
-            items.append(f"· {title}" + (f"\n  {one}" if one else ""))
-        top = sorted(tags.items(), key=lambda kv: -kv[1])[:5]
-        lines = [
-            "🗓 这周的学习小结",
-            f"看了 {len(recent)} 个视频，写了 {len(recent)} 篇笔记（约 {max(1, chars // 1000)} 千字）",
-            f"绕不开的主题：{'、'.join(t for t, _ in top) if top else '（还比较散）'}",
-            "",
-        ]
-        lines += items[:8]
-        if len(recent) > 8:
-            lines.append(f"…还有 {len(recent) - 8} 篇，发 /bili 笔记 可以翻。")
-        return "\n".join(lines)
     async def _cmd_review(self, event: AstrMessageEvent) -> AsyncGenerator[MessageEventResult, None]:
         """随机抽一篇旧笔记，让模型出三个小问题考一考。"""
         files = self._notes_files()
@@ -3940,7 +3922,7 @@ class BiliLearningPlugin(Star):
         if not text or len(text) > 40:
             return
         _m_idx = re.search(r"第\s*[0-9]{1,3}\s*条", text)
-        _wants = bool(re.search(r"(讲|念|复述|说说|read|背|看看|哪条|哪篇)", text))
+        _wants = bool(re.search(r"(讲|念|复述|说说|聊聊|聊|read|背|看看|哪条|哪篇|那条|那一条|具体)", text))
         if not _m_idx and not (_wants and "笔记" in text):
             return
         sysp = getattr(request, "system_prompt", "") or ""
@@ -4179,24 +4161,6 @@ class BiliLearningPlugin(Star):
         budget = int(self.config.get("daily_token_budget", 150000) or 0)
         if budget and int(self._usage_today().get("tokens", 0)) >= budget:
             return
-        # 周报：周六/周日晚上 21 点后发一次，每周只发一次
-        if self.config.get("weekly_report", True):
-            iso = now.isocalendar()
-            week_key = f"{iso[0]}-W{iso[1]}"
-            if (
-                now.weekday() >= 5
-                and 21 <= now.hour < 24
-                and self.state.get("weekly_sent") != week_key
-            ):
-                self.state["weekly_sent"] = week_key
-                self._save_state()
-                share_umo = str(self.state.get("share_umo") or "").strip()
-                if share_umo:
-                    try:
-                        await self._notify(share_umo, self._cmd_weekly())
-                        self._log("发出本周学习小结")
-                    except Exception as exc:
-                        logger.warning(f"[bili] 周报发送失败: {exc!r}")
         runs_per_day = int(self.config.get("runs_per_day", 2) or 2)
         runs_today = int(day.get("runs", 0) or 0)
         min_gap = int(self.config.get("min_gap_minutes", 45) or 0)
