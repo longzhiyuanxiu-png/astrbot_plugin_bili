@@ -348,6 +348,7 @@ body{background-attachment:fixed}
 .polish-marker{}
 .notewrap{flex:1;min-height:0;display:grid;grid-template-columns:minmax(280px,336px) 1fr;gap:16px;align-items:stretch}
 .notewrap .cal{align-self:start}
+.notewrap > .leftcol{display:flex;flex-direction:column;gap:0;min-height:0;align-self:start;max-height:100%;overflow:auto;padding-right:2px}
 .cal{padding:16px 16px 12px;border:1px solid var(--line);border-radius:16px;background:#fcfdff;box-shadow:0 1px 3px rgba(30,44,80,.04)}
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .cal-title{font-size:13.5px;font-weight:700;color:var(--text)}
@@ -585,16 +586,8 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
       <section class="card fill">
         <h2>我的笔记<span class="hint" id="noteCount"></span></h2>
         <div class="search"><span style="color:var(--muted)">🔍</span><input id="q" placeholder="搜标题、标签…" autocomplete="off"></div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
-          <button class="btn ghost" id="btnTrash" type="button">🗑 回收站<span id="trashN" style="color:var(--muted);margin-left:6px"></span></button>
-          <span style="color:var(--muted);font-size:13px">删掉的笔记先放这里，可恢复或彻底删除</span>
-        </div>
-        <div id="trashList" style="display:none;margin-top:8px;max-height:30vh;overflow:auto"></div>
-                <div class="notewrap">
-          <div class="cal" id="cal"></div>
-          <div class="notes" id="notes"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
-        </div>
-      </section>
+        <div class="notewrap"><div class="leftcol"><div class="cal" id="cal"></div><div id="trashBox" style="margin-top:12px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="btnTrash" type="button">🗑 回收站<span id="trashN" style="margin-left:6px;color:#8b9bc4;font-weight:600">0</span></button><span style="color:#8b9bc4;font-size:12px">删掉的先放这儿，可恢复</span></div><div id="trashList" style="display:none;margin-top:8px;max-height:34vh;overflow:auto"></div></div></div><div class="notes" id="notes"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div></div>
+    </section>
     </section>
 
     <section class="page" data-page="switches">
@@ -737,11 +730,11 @@ async function loadTrash(force){
   }
   box.innerHTML = items.map(function(it){
     var nm = encodeURIComponent(it.name);
-    return '<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e6ecf7;border-radius:10px;padding:7px 12px;margin-bottom:6px">'
-      + '<span style="flex:1;min-width:0;font-weight:600;font-size:13.5px;color:#22315b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(it.title || it.name) + '</span>'
-      + '<span style="color:#9aa9cc;font-size:12px;white-space:nowrap">' + String(fmtTime(it.mtime)).slice(5) + " · " + (Number(it.size||0)/1024).toFixed(1) + 'KB</span>'
-      + '<button class="btn ghost" type="button" data-restore="' + nm + '" style="padding:3px 10px;font-size:12.5px">恢复</button>'
-      + '<button class="btn ghost" type="button" data-purge="' + nm + '" style="padding:3px 10px;font-size:12.5px;color:#e0567a">删除</button>'
+    return '<div style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #e6ecf7;border-radius:8px;padding:5px 8px;margin-bottom:5px">'
+      + '<span style="flex:1;min-width:0;font-weight:600;font-size:12.5px;color:#22315b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(it.title || it.name) + '">' + esc(it.title || it.name) + '</span>'
+      + '<span style="color:#a8b5d4;font-size:11px;white-space:nowrap">' + String(fmtTime(it.mtime)).slice(5) + '</span>'
+      + '<button type="button" data-restore="' + nm + '" style="border:0;background:none;color:#2f6df6;font-size:12px;padding:0 2px;cursor:pointer">恢复</button>'
+      + '<button type="button" data-purge="' + nm + '" style="border:0;background:none;color:#e0567a;font-size:12px;padding:0 2px;cursor:pointer">删除</button>'
       + '</div>';
   }).join("");
   box.querySelectorAll("[data-restore]").forEach(function(b){
