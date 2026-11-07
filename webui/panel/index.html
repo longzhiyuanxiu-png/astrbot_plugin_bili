@@ -1236,16 +1236,19 @@ document.addEventListener("click", function(e){
   if (e.target.closest("#loginClose") || e.target.closest("#loginMask")) { loginClose(); }
 });
 function renderNext(){
-  var el = $("pillNextTxt");
+  var el = $("pillNextTxt"), box = $("pillNext");
   if (!el) return;
   var n = NEXT_INFO, st = (n && n.state) || "";
+  var logging = ($("loginBox") && $("loginBox").classList.contains("on"));
+  if (st === "running" || (n && n.busy)) { if (box) box.style.display = "none"; return; }
+  if (box) box.style.display = "";
+  if (logging) { el.textContent = "登录中…"; return; }
   if (!n) { el.textContent = "下一轮 --:--"; return; }
-  if (st === "offline") { el.textContent = "小号未登录"; return; }
+  if (st === "offline") { el.textContent = "未登录 · 点此扫码"; return; }
   if (st === "paused") { el.textContent = "已暂停"; return; }
   if (st === "off") { el.textContent = "自动学习关"; return; }
   if (st === "done") { el.textContent = "今天学完了"; return; }
   if (st === "quiet") { el.textContent = "免打扰中"; return; }
-  if (st === "running") { el.textContent = "正在学…"; return; }
   var at = +n.at || 0;
   if (!at) { el.textContent = "下一轮 --:--"; return; }
   var left = at - Date.now() / 1000;
