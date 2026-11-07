@@ -242,13 +242,13 @@ a{color:var(--accent2);text-decoration:none}
 .bubble.on .b-shape{opacity:1;transform:none;transition-delay:.26s}
 .bubble .b-body{position:absolute;left:55.75%;top:36%;width:66%;height:64%;
   transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;color:#536ba9;line-height:1.15;white-space:nowrap;pointer-events:none;
+  text-align:center;color:#3f5590;line-height:1.32;white-space:normal;word-break:break-word;padding:0 7%;pointer-events:none;
   opacity:0;transition:opacity .16s ease,transform .3s ease}
 .bubble.on .b-body{opacity:1;transition:opacity .16s ease .36s,transform .3s ease}
-.bubble .b-label{flex:0 0 auto;font-size:calc(var(--u) * 58);font-weight:600;letter-spacing:.06em}
+.bubble .b-label{flex:0 0 auto;font-size:calc(var(--u) * 56);font-weight:700;letter-spacing:.04em}
 .bubble .b-amount{flex:0 0 auto;font-size:calc(var(--u) * 118);font-weight:800;line-height:1.05;
   color:#203170;letter-spacing:-.01em}
-.bubble .b-hint{flex:0 0 auto;font-size:calc(var(--u) * 56);color:#9fb0d9;letter-spacing:.02em;
+.bubble .b-hint{flex:0 0 auto;font-size:calc(var(--u) * 52);color:#3f5590;letter-spacing:.02em;
   margin-top:calc(var(--u) * 9);line-height:1.15}
 .bubble .b-extra{margin-top:calc(var(--u) * 6);font-size:calc(var(--u) * 44);color:#8b9bc4;font-weight:600;letter-spacing:.02em}
 .bubble.warn .b-amount{color:#b9791a}
@@ -1577,6 +1577,7 @@ function toggleBubble(){
     var q = new URLSearchParams(location.search);
     if (q.get("bubble") === "1") { _bubDebug = true; setTimeout(showBubble, 600); }
 
+
     if (q.get("round") === "1") setTimeout(function(){
       var rl2 = document.getElementById("bLabel"), ra2 = document.getElementById("bAmount"), rh2 = document.getElementById("bHint");
       if (rl2) rl2.textContent = "刚看完";
@@ -1603,7 +1604,7 @@ var PAGE_TITLES = { overview: "概览", notes: "我的笔记", switches: "设置
 var _curPage = "overview";
 function showPage(name){
   if (!PAGE_TITLES[name]) name = "overview";
-  _curPage = name;
+  var _prevPage = _curPage;   _curPage = name;
   var i, ps = document.querySelectorAll(".page"), ns = document.querySelectorAll(".nv");
   for (i = 0; i < ps.length; i++) ps[i].classList.toggle("on", ps[i].getAttribute("data-page") === name);
   for (i = 0; i < ns.length; i++) ns[i].classList.toggle("on", ns[i].getAttribute("data-page") === name);
@@ -1611,7 +1612,13 @@ function showPage(name){
   if (t) t.textContent = PAGE_TITLES[name];
   try { localStorage.setItem("bili_page", name); } catch (e) {}
   try { if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name); } catch (e) {}
-  try { renderModule(); } catch (e) {}
+  if (_prevPage !== name) { setTimeout(function(){
+    try {
+      renderModule(); showBubble();
+      var bb = document.getElementById("bubble");
+      if (bb) { bb.classList.add("on"); bb.style.visibility = "visible"; bb.style.opacity = "1"; }
+    } catch (e) {}
+  }, 80); }
 }
 function renderOverviewNotes(){
   var el = document.getElementById("ovNotes");
