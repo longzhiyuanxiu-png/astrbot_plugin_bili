@@ -2783,19 +2783,19 @@ class BiliLearningPlugin(Star):
     EMPTY_LINES = (
         (
             "今天一个视频都没看成。",
-            "翻来翻去找不到中意的，不是偷懒。",
+            "扫了一遍，没碰到想点进去的。",
         ),
         (
-            "今天颗粒无收…… 挑了半小时，一个都没点进去。",
-            "胃口有点挑，得缓缓。",
+            "今天颗粒无收…… 挑了几个都觉得没劲。",
+            "明天再看看有没有好的。",
         ),
         (
             "汇报：今天 0 个视频、0 篇笔记。",
-            "原因：挑食。不是没空。",
+            "没找到合适的，就先这样吧。",
         ),
         (
             "今天…啥也没看。",
-            "不是不想看，是刷了半天都没一个对胃口的。",
+            "翻到的都不太对胃口，明天再找。",
         ),
     )
 
@@ -2806,6 +2806,9 @@ class BiliLearningPlugin(Star):
         videos = int(usage.get("videos", 0) or 0) or len(notes)
 
         if not notes and not videos:
+            day = (self.state.get("plan") or {}).get(self._today()) or {}
+            if int(day.get("runs", 0) or 0) <= 0:
+                return ""  # 今天还没开张，没什么可汇报的
             a, b = random.choice(self.EMPTY_LINES)
             empty_openers = (
                 "报告报告～",
@@ -3093,6 +3096,9 @@ class BiliLearningPlugin(Star):
         day = (self.state.get("plan") or {}).get(now.strftime("%Y-%m-%d")) or {}
         runs_today = int(day.get("runs", 0) or 0)
         runs_per_day = int(self.config.get("runs_per_day", 2) or 2)
+        if runs_today <= 0:
+            # 今天还没开过工（常见于刚过零点），不算收工，别给新的一天发空报表
+            return False
         if runs_today >= runs_per_day:
             return True
         windows = self._windows()
