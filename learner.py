@@ -914,6 +914,15 @@ class Learner:
         # 但「感不感兴趣」仍由模型按内容判断，不搞一刀切。
         info = pack["info"]
         notes_dir.mkdir(parents=True, exist_ok=True)
+        def _pub(d) -> str:
+            try:
+                ts = int(float((d or {}).get("pubdate") or 0))
+            except Exception:
+                ts = 0
+            if not ts:
+                return "—"
+            return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+
         stamp = datetime.now().strftime("%Y%m%d-%H%M")
         safe = re.sub(r"[\\/:*?\"<>|]+", "_", (note.get("title") or info.get("title") or "笔记"))[:40]
         path = notes_dir / f"{stamp}_{safe}.md"
@@ -948,15 +957,6 @@ class Learner:
         else:
             insight_text = str(raw_insights or "").strip()
         tags = note.get("tags") or []
-
-        def _pub(d) -> str:
-            try:
-                ts = int(float((d or {}).get("pubdate") or 0))
-            except Exception:
-                ts = 0
-            if not ts:
-                return "—"
-            return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
 
         def _dur(v) -> str:
             try:
