@@ -772,6 +772,14 @@ class Learner:
         if dev_cfg in ("auto", "cuda", "gpu"):
             cands += [("cuda", "float16"), ("cuda", "int8_float16")]
         cands.append(("cpu", "int8"))
+        _need_dl = not (_local / "model.bin").exists()
+        if _need_dl:
+            _size = {"tiny": "75 MB", "base": "140 MB", "small": "460 MB", "medium": "1.5 GB", "large-v3": "2.9 GB"}.get(name, "视模型而定")
+            logger.info(f"[bili] 首次使用 {name} 模型，正在下载（约 {_size}），请耐心等待…")
+            try:
+                self._log(f"首次运行：正在下载转写模型 {name}（约 {_size}），下载完自动开始")
+            except Exception:
+                pass
         model = None
         last_err = None
         for _dev, _ct in cands:
@@ -781,6 +789,8 @@ class Learner:
                     cpu_threads=threads, num_workers=1,
                 )
                 logger.info(f"[bili] 转写模型已加载（{name} / {_dev}/{_ct}，{time.time() - t0:.1f} 秒，{_target}）")
+                if _need_dl:
+                    logger.info(f"[bili] 模型下载完成，总计用时 {time.time() - t0:.0f} 秒")
                 _WHISPER_CACHE["device"] = _dev
                 break
             except Exception as exc:

@@ -11,7 +11,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
-import httpx
+try:
+    import httpx
+except Exception:  # 依赖没装时先加载插件，自动安装完成后即可用
+    httpx = None
 try:  # 允许脱离 AstrBot 单独 import（测试用）
     from astrbot.api import logger
 except Exception:  # pragma: no cover

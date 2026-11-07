@@ -14,7 +14,10 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
-import qrcode
+try:
+    import qrcode  # noqa: F401
+except Exception:  # 依赖没装时插件也要能加载，自动安装会补上
+    qrcode = None
 from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.message_components import Image, Plain, Record
@@ -131,6 +134,11 @@ class BiliLearningPlugin(Star):
             logger.warning(f"[bili] 兴趣算法迁移失败：{exc!r}")
         self._save_state(force=True)  # 让 state.json 里的兴趣池和配置保持一致
         self._poll_tasks: set[asyncio.Task] = set()
+        self._deps_state = "ok"
+        try:
+            self._ensure_deps()
+        except Exception as _e:  # noqa: BLE001
+            logger.warning(f"[bili] 依赖自检失败（不影响使用）: {_e!r}")
         # 三个分享开关：B站私信 / QQ汇报 / 语音（兼容旧键 bili_dm_enabled、voice_report）
         migrated = False
         if "share_dm" not in self.config:
@@ -332,6 +340,52 @@ class BiliLearningPlugin(Star):
             return ""
 
     # ---------------- 面板内扫码登录
+    _DEPS = ("qrcode", "httpx", "numpy", "av", "faster_whisper", "Crypto", "bilibili_api", "PIL")
+
+    def _ensure_deps(self) -> None:
+        """缺依赖就后台自动 pip 安装（首次装插件后省掉手动点「安装依赖」）。"""
+        import importlib.util
+
+        missing = [m for m in self._DEPS if importlib.util.find_spec(m) is None]
+        if not missing:
+            return
+        self._deps_state = "installing"
+        logger.info(f"[bili] 缺少依赖：{missing}，开始自动安装（首次约 2-3 分钟）")
+        try:
+            self._log(f"首次运行：正在自动安装依赖（{', '.join(missing)}），约 2-3 分钟")
+        except Exception:
+            pass
+        import threading
+
+        threading.Thread(target=self._pip_install, args=(missing,), daemon=True).start()
+
+    def _pip_install(self, missing) -> None:
+        import subprocess
+        import sys
+
+        here = Path(__file__).resolve().parent
+        req = here / "requirements.txt"
+        cmd = [
+            sys.executable, "-m", "pip", "install", "-r", str(req),
+            "-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
+            "--disable-pip-version-check",
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+            if proc.returncode == 0:
+                self._deps_state = "ok"
+                logger.info("[bili] 依赖安装完成")
+                try:
+                    self._log("依赖自动安装完成")
+                except Exception:
+                    pass
+            else:
+                self._deps_state = "failed"
+                logger.error(f"[bili] 依赖安装失败：{(proc.stderr or proc.stdout or '')[-600:]}")
+        except Exception as exc:  # noqa: BLE001
+            self._deps_state = "failed"
+            logger.error(f"[bili] 依赖安装异常：{exc!r}")
+
     def _qr_png(self, url: str) -> str:
         try:
             import io as _io, base64 as _b64
@@ -498,6 +552,7 @@ class BiliLearningPlugin(Star):
                 "ok": True,
                 "data": {
                     "bot_name": self._bot_name(),
+                    "deps": getattr(self, "_deps_state", "ok"),
                     "panel_title": str(self.config.get("panel_title") or "") or self._bot_name(),
                     "panel_subtitle": str(self.config.get("panel_subtitle") or "") or "B站学习面板",
                     "today": today,

@@ -503,6 +503,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
 .pager{display:flex;align-items:center;gap:12px;justify-content:center;margin:14px 2px 4px}
 .pager .pg-info{font-size:12.5px;color:#8b9bc4}
 .pager .btn[disabled]{opacity:.45;cursor:default}
+.depbar{display:block;margin:0 0 12px;padding:9px 14px;border-radius:12px;background:linear-gradient(90deg,rgba(47,109,246,.12),rgba(244,82,126,.08));border:1px solid rgba(47,109,246,.22);font-size:13px;color:#3f5590;line-height:1.6}
 </style>
 </head>
 <script>window.onerror=function(m,src,l,c){try{document.title="ERR "+m+" @"+l+":"+c;}catch(e){}return false;};</script>
@@ -572,6 +573,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
     </div>
 
     <section class="page on" data-page="overview">
+      <div id="depBar" class="depbar" style="display:none"></div>
       <div class="kpis">
         <div class="kpi"><div class="label">今天啃的视频</div><div class="value" id="kVideo">–</div><div class="sub" id="kVideoSub">个视频</div></div>
         <div class="kpi"><div class="label">今天写的笔记</div><div class="value" id="kNote">–</div><div class="sub" id="kNoteSub">篇</div></div>
@@ -793,6 +795,15 @@ function fdate(ts){
 }
 function renderKpis(d){
   $("kVideo").textContent = d.videos_today;
+  var _db = $("depBar");
+  if (_db){
+    if (d.deps && d.deps !== "ok"){
+      _db.style.display = "block";
+      _db.textContent = d.deps === "installing"
+        ? "首次运行：正在自动安装依赖（约 2-3 分钟），装完她就能开始学，不用管它。"
+        : "依赖安装失败：请到 AstrBot 日志查看 pip 报错，或手动执行 pip install -r requirements.txt。";
+    } else { _db.style.display = "none"; }
+  }
   $("kNote").textContent = d.notes_today;
   $("kToken").textContent = nfmt(d.tokens_today);
   if ($("kCost")) $("kCost").textContent = (Number(d.cost_today) || 0).toFixed(2);
