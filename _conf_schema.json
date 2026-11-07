@@ -377,7 +377,7 @@
         "type": "string",
         "description": "收藏到哪个收藏夹",
         "default": "默认收藏夹",
-        "hint": "填收藏夹名字，例如「大肥鱼的学习」；找不到就用第一个"
+        "hint": "填收藏夹名字，例如「我的学习」；找不到就用第一个"
       },
       "action_min_interval_sec": {
         "type": "int",
