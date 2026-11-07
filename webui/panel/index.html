@@ -1542,6 +1542,7 @@ function toggleBubble(){
   })();
 
   // 学完一轮：冒一句
+  try { window.deleteNote = deleteNote; } catch (e) {}
   window.__biliOnSummary = function(d){
     try {
       var lr = d && d.last_round;
@@ -1576,6 +1577,7 @@ function toggleBubble(){
   try{
     var q = new URLSearchParams(location.search);
     if (q.get("bubble") === "1") { _bubDebug = true; setTimeout(showBubble, 600); }
+
 
 
     if (q.get("round") === "1") setTimeout(function(){
