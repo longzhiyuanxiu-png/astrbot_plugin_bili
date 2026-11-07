@@ -32,6 +32,20 @@ except ImportError:  # pragma: no cover - 兼容非包方式加载
     from bili_api import BiliAPI
     from learner import Learner
 PLUGIN_NAME = "astrbot_plugin_bili"
+
+# 兴趣模板：面板上选方向就展开成种子词（词 权重）
+INTEREST_PRESETS: Dict[str, List[str]] = {
+    "动漫": ["本季新番 2.60", "番剧吐槽 2.30", "动画杂谈 2.20", "新番导视 2.20"],
+    "影视": ["影视解说 2.50", "悬疑推理 2.00", "影评 2.00"],
+    "游戏": ["游戏实况 2.40", "单机测评 2.00", "游戏解说 2.00"],
+    "科技": ["数码测评 2.40", "AI 2.40", "开源项目 2.00"],
+    "知识": ["科普 2.40", "历史 2.00", "财经解读 2.00"],
+    "音乐": ["ACG音乐 2.20", "日语歌 2.20", "音乐现场 2.00"],
+    "生活": ["美食 2.00", "萌宠 2.00", "旅行 2.00"],
+    "运动": ["健身 2.00", "篮球 2.00", "足球 2.00"],
+    "二次元": ["二次元 2.20", "MMD 2.00", "虚拟主播 2.00"],
+}
+
 DESC = (
     "📺 让她用自己的B站小号自主学习：自己选题、看视频、写笔记、主动分享收获。"
     "支持点赞/收藏（限额）、弹幕热评输入、知识入库、语音汇报。默认干跑模式，所有限制都能在后台配置页调整。"
@@ -86,6 +100,18 @@ class BiliLearningPlugin(Star):
         self.notes_dir.mkdir(parents=True, exist_ok=True)
         self.cookie_path = Path(str(self.config.get("cookie_path") or "").strip()
                                or (Path(__file__).parent / "bili-cookie.json"))
+        # 兴趣模板：只选了方向、没填种子时，按模板展开成种子
+        try:
+            if not list(self.config.get("interest_topics") or []) and list(
+                self.config.get("interest_presets") or []
+            ):
+                seeds = self._expand_presets(self.config.get("interest_presets"))
+                if seeds:
+                    self.config["interest_topics"] = seeds
+                    self.config.save_config()
+                    logger.info(f"[bili] 已按兴趣模板展开 {len(seeds)} 个种子")
+        except Exception as exc:
+            logger.warning(f"[bili] 展开兴趣模板失败：{exc!r}")
         self.state_path = self.notes_dir / "state.json"
         self.log_path = self.notes_dir / "activity.log"
         self.qr_path = self.notes_dir / "login_qr.png"
@@ -842,6 +868,72 @@ class BiliLearningPlugin(Star):
 
     async def _panel_interests(self, **kwargs) -> dict:
         return {"ok": True, "data": {"items": self._panel_interest_rows()}}
+
+    @staticmethod
+    def _expand_presets(names) -> List[str]:
+        """把模板名展开成「词 权重」列表，同名取最大权重。"""
+        if isinstance(names, str):
+            names = [s for s in re.split(r"[,，、\s]+", names) if s]
+        merged: Dict[str, float] = {}
+        for name in names or []:
+            for item in INTEREST_PRESETS.get(str(name).strip(), []):
+                word, _, weight = str(item).partition(" ")
+                word = word.strip()
+                if not word:
+                    continue
+                try:
+                    w = float(weight)
+                except Exception:
+                    w = 2.0
+                merged[word] = max(merged.get(word, 0.0), w)
+        return [f"{w} {v:.2f}" for w, v in merged.items()]
+
+    async def _panel_interest_presets(self, **kwargs) -> dict:
+        return {
+            "ok": True,
+            "data": {
+                "presets": [
+                    {"name": name, "items": items, "count": len(items)}
+                    for name, items in INTEREST_PRESETS.items()
+                ],
+                "selected": list(self.config.get("interest_presets") or []),
+            },
+        }
+
+    async def _panel_interest_apply(self, payload=None, **kwargs) -> dict:
+        data = payload if isinstance(payload, dict) else {}
+        names = data.get("presets") or []
+        if isinstance(names, str):
+            names = [s for s in re.split(r"[,，、\s]+", names) if s]
+        seeds = self._expand_presets(names)
+        if not seeds:
+            return {"ok": False, "error": "没有选方向", "data": {"items": self._panel_interest_rows()}}
+        self.config["interest_topics"] = seeds
+        self.config["interest_presets"] = [str(n).strip() for n in names if str(n).strip()]
+        self.config.save_config()
+        pool = dict(self.state.get("interests") or {})
+        for item in seeds:
+            word, _, weight = item.rpartition(" ")
+            try:
+                w = float(weight)
+            except Exception:
+                w = 2.0
+            pool[word.strip()] = max(float(pool.get(word.strip(), 0) or 0), w)
+        self.state["interests"] = pool
+        self._save_state()
+        self._log(f"按兴趣模板重设方向：{'、'.join(str(n) for n in names)}")
+        return {"ok": True, "data": {"items": self._panel_interest_rows(), "seeds": seeds}}
+
+    async def _panel_interest_reset(self, **kwargs) -> dict:
+        self.config["interest_topics"] = []
+        self.config["extra_interests"] = []
+        self.config["interest_presets"] = []
+        self.config.save_config()
+        self.state["interests"] = {}
+        self.state["interest_stats"] = {}
+        self._save_state()
+        self._log("兴趣已重置（种子、拓展、自学标签全部清空）")
+        return {"ok": True, "data": {"items": []}}
 
     def _panel_schema_data(self) -> Dict[str, Any]:
         """把 _conf_schema.json 拍平成前端可渲染的设置项（带当前值）。"""

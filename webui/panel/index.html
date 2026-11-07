@@ -261,6 +261,19 @@ a{color:var(--accent2);text-decoration:none}
 .lg-sum div{font-size:12px;color:var(--text2)}
 .lg-sum b{display:block;font-size:19px;color:#203170;letter-spacing:.3px}
 @media (max-width:1639px){.bubble{display:none}}
+
+/* ---------- 兴趣引导 ---------- */
+.page[data-page="interests"]{flex-direction:column;gap:14px;align-items:stretch}
+#intGuide{margin:0}
+.int-chips{display:flex;flex-wrap:wrap;gap:9px;margin:6px 0 12px}
+.int-chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 15px;font-size:14px;cursor:pointer;transition:all .15s}
+.int-chip:hover{border-color:#c3d4f7}
+.int-chip.on{background:rgba(47,109,246,.1);border-color:var(--accent);color:var(--accent);font-weight:600}
+.int-chip .n{opacity:.55;font-size:12px;margin-left:2px}
+.int-tools{display:flex;gap:8px;justify-content:flex-end;margin-top:-4px}
+.guide-t{font-size:18px;font-weight:800;color:var(--text);margin:0 0 6px}
+.guide-d{font-size:13.5px;color:var(--text-2);line-height:1.7;margin:0 0 10px}
+.guide-acts{display:flex;gap:10px;margin-top:6px}
 </style>
 
 <style>
@@ -558,6 +571,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
     </section>
 
     <section class="page" data-page="interests">
+      <section class="card" id="intGuide" hidden></section>
       <div class="int-grid">
         <section class="card fill">
           <h2>种子兴趣<span class="hint" id="intSeedCnt">—</span></h2>
@@ -571,6 +585,10 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
           <div class="int-list" id="intExtra"></div>
           <div class="int-add"><input id="extraNew" placeholder="加一个拓展词，如「装机」"><button class="btn sm" id="extraAdd">添加</button></div>
         </section>
+      </div>
+      <div class="int-tools">
+        <button class="btn ghost sm" id="intPickBtn">重新选方向</button>
+        <button class="btn ghost sm" id="intResetBtn">重置兴趣</button>
       </div>
     </section>
   </main>
@@ -857,6 +875,74 @@ function intSave(kind){
     else { toast("保存失败"); loadInterests(); }
   }).catch(function(){ toast("保存失败"); });
 }
+var INT_PRESETS = [], INT_PICK = {};
+function loadPresets(){
+  call("GET", "interest_presets").then(function(d){
+    var data = (d && d.data) || {};
+    INT_PRESETS = data.presets || [];
+    (data.selected || []).forEach(function(n){ INT_PICK[n] = true; });
+    renderGuide();
+  }).catch(function(){});
+}
+function renderGuide(){
+  var box = $("intGuide");
+  if (!box) return;
+  var empty = !INT.seed.length;
+  if (!empty && !INT_PICK.__open) { box.hidden = true; box.innerHTML = ""; return; }
+  var chips = INT_PRESETS.map(function(p){
+    var on = INT_PICK[p.name] ? " on" : "";
+    return '<button class="int-chip' + on + '" data-p="' + p.name + '">' + p.name +
+      '<span class="n">' + p.count + '</span></button>';
+  }).join("");
+  box.hidden = false;
+  box.innerHTML =
+    '<h2 class="guide-t">' + (empty ? "先选 2–3 个方向吧" : "选方向") + '</h2>' +
+    '<p class="guide-d">' + (empty
+      ? "装好还没设兴趣，她暂时不知道学什么。选几个方向，我把它展开成种子词（也可以什么都不选，让她自己刷几天长出来）。"
+      : "重新选会覆盖当前的种子词，自己拓展的标签保留。") + '</p>' +
+    '<div class="int-chips">' + chips + '</div>' +
+    '<div class="guide-acts">' +
+    '<button class="btn primary sm" id="intApply">保存并开始</button>' +
+    '<button class="btn sm" id="intLater">' + (empty ? "先让她自己探索" : "取消") + '</button>' +
+    '</div>';
+  var ap = $("intApply");
+  if (ap) ap.onclick = function(){ applyPresets(); };
+  var lr = $("intLater");
+  if (lr) lr.onclick = function(){
+    INT_PICK.__open = false;
+    if (empty) { box.hidden = true; box.innerHTML = ""; toast("那就先让她自己刷，过几天标签就长出来了"); }
+    else renderGuide();
+  };
+  box.querySelectorAll(".int-chip").forEach(function(el){
+    el.onclick = function(){
+      var n = el.getAttribute("data-p");
+      if (INT_PICK[n]) delete INT_PICK[n]; else INT_PICK[n] = true;
+      el.classList.toggle("on");
+    };
+  });
+}
+function applyPresets(){
+  var names = Object.keys(INT_PICK).filter(function(k){ return k !== "__open"; });
+  if (!names.length) { toast("先选一个方向"); return; }
+  call("POST", "interest_apply", { presets: names }).then(function(d){
+    if (d && d.ok && d.data && d.data.items) {
+      INT_PICK.__open = false;
+      renderInterests(d.data.items);
+      toast("已按方向铺好种子");
+    } else toast("保存失败");
+  }).catch(function(){ toast("保存失败"); });
+}
+function resetInterests(){
+  if (!confirm("确定重置兴趣？种子词、自己拓展的标签、她自学出来的权重都会清空，笔记不受影响。")) return;
+  call("POST", "interest_reset", {}).then(function(d){
+    if (d && d.ok) {
+      INT_PICK = {};
+      renderInterests([]);
+      renderGuide();
+      toast("已重置");
+    } else toast("重置失败");
+  }).catch(function(){ toast("重置失败"); });
+}
 function renderInterests(rows){
   rows = rows || [];
   INT.seed = rows.filter(function(r){ return r.seed; });
@@ -866,6 +952,7 @@ function renderInterests(rows){
   var a = $("intSeedCnt"), b = $("intExtraCnt");
   if (a) a.textContent = INT.seed.length + " 个";
   if (b) b.textContent = INT.extra.length + " 个";
+  if (typeof renderGuide === "function" && INT_PRESETS.length) renderGuide();
 }
 function intMutate(kind, word, act){
   var list = INT[kind];
@@ -907,6 +994,10 @@ function bindInterests(){
   }
   wire("intSeeds", "seedNew", "seedAdd", "seed");
   wire("intExtra", "extraNew", "extraAdd", "extra");
+    var pk = $("intPickBtn");
+    if (pk) pk.onclick = function(){ INT_PICK.__open = true; renderGuide(); };
+    var rs = $("intResetBtn");
+    if (rs) rs.onclick = function(){ resetInterests(); };
 }
 function noteTags(n){
   return String(n.tags || "").split(/[,，、\s]+/).map(function(s){ return s.trim(); }).filter(Boolean);
@@ -1073,6 +1164,7 @@ async function loadInterests(){
   var rows = (r && r.data && r.data.items) || (r && r.data) || [];
   if (!Array.isArray(rows)) rows = [];
   renderInterests(rows);
+  loadPresets();
 }
 async function loadHistory(){
   try{
