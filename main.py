@@ -3199,9 +3199,21 @@ class BiliLearningPlugin(Star):
                 q = ""
             else:
                 return "刚才那条我这边对不上号了，说个关键词或「第 N 条」吧。"
-        m_idx = re.fullmatch(r"第?\s*([0-9]{1,3})\s*条?", q)
+        m_idx = re.fullmatch(r"第?\s*([0-9０-９]{1,3}|[一二三四五六七八九十]{1,3})\s*条?", q)
         if m_idx:
-            _n = int(m_idx.group(1))
+            _raw_n = m_idx.group(1).translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+            _cn = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+            if _raw_n.isdigit():
+                _n = int(_raw_n)
+            elif _raw_n == "十":
+                _n = 10
+            elif _raw_n.startswith("十"):
+                _n = 10 + _cn.get(_raw_n[1:], 0)
+            elif "十" in _raw_n:
+                _a, _, _b = _raw_n.partition("十")
+                _n = _cn.get(_a, 0) * 10 + (_cn.get(_b, 0) if _b else 0)
+            else:
+                _n = _cn.get(_raw_n, 0)
             _pool = _todays or files
             if not 1 <= _n <= len(_pool):
                 return f"今天的笔记一共 {len(_pool)} 条，没有第 {_n} 条。"
@@ -3933,11 +3945,25 @@ class BiliLearningPlugin(Star):
         if "bili_notes" in sysp and "full" in sysp:
             return
         if _m_idx:
+            _num = re.sub(r"[^0-9]", "", _m_idx.group(0))
+            _body = ""
+            try:
+                _tag0 = datetime.now().strftime("%Y%m%d")
+                _today = [fp for fp in self._notes_files() if fp.name != "index.md" and fp.stem.startswith(_tag0)]
+                _n0 = int(_num) if _num.isdigit() else 0
+                if _n0 and 1 <= _n0 <= len(_today):
+                    _fp = _today[_n0 - 1]
+                    _txt = _fp.read_text(encoding="utf-8")
+                    _body = "\n\n【正文（已在下面，直接照着讲，不要再说找不到）】\n《" + _fp.stem.split("_", 1)[-1] + "》\n" + _txt[:2000]
+            except Exception:
+                _body = ""
             _hint = (
                 "\n\n【这一轮必须调用工具】主人说的「" + _m_idx.group(0) + "」指今天笔记列表里的第 "
-                + re.sub(r"[^0-9]", "", _m_idx.group(0)) + " 条。"
+                + (_num or "?") + " 条。"
                 "请调用 bili_notes（query 填那个数字、full 设成 true）拿到整篇正文，"
                 "再照着正文自然地讲给他听；不要说自己讲不了、不要让他发原件、不要只念标题。"
+                "也不要延续上一轮聊过的内容——主人这次问的是第 " + (_num or "?") + " 条，不是别的。"
+                + _body
             )
         else:
             _hint = (
