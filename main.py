@@ -794,6 +794,75 @@ class BiliLearningPlugin(Star):
             logger.warning(f"[bili] 页面读取笔记内容失败: {exc!r}")
             return {"ok": False, "error": str(exc), "data": {}}
 
+    async def _panel_trash(self, **kwargs) -> dict:
+        """回收站列表。"""
+        trash = self.notes_dir / "notes" / "trash"
+        items = []
+        try:
+            if trash.exists():
+                for p in sorted(trash.glob("*.md"), key=lambda x: x.stat().st_mtime, reverse=True):
+                    title = p.stem
+                    try:
+                        first = p.read_text(encoding="utf-8", errors="replace").splitlines()[:1]
+                        if first:
+                            title = first[0].lstrip("# ").strip() or p.stem
+                    except Exception:
+                        pass
+                    items.append({
+                        "name": p.name,
+                        "title": title,
+                        "size": p.stat().st_size,
+                        "mtime": int(p.stat().st_mtime),
+                    })
+        except Exception as exc:
+            logger.warning(f"[bili] 回收站读取失败: {exc!r}")
+        return {"ok": True, "data": {"items": items, "count": len(items)}}
+
+    async def _panel_trash_restore(self, payload=None, **kwargs) -> dict:
+        """把回收站里的笔记移回 notes/。"""
+        data = payload if isinstance(payload, dict) else {}
+        name = str(data.get("name") or kwargs.get("name") or "").strip()
+        if not name:
+            return {"ok": False, "error": "缺少 name"}
+        src = self.notes_dir / "notes" / "trash" / Path(name).name
+        dst = self.notes_dir / "notes" / Path(name).name
+        if not src.exists():
+            return {"ok": False, "error": "回收站里没有这个文件"}
+        try:
+            shutil.move(str(src), str(dst))
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        try:
+            txt = dst.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r"bilibili\.com/video/(BV[0-9A-Za-z]+)", txt)
+            if m:
+                lst = self.state.get("deleted_bvids") or []
+                if m.group(1) in lst:
+                    lst.remove(m.group(1))
+                    self.state["deleted_bvids"] = lst
+                    self._save_state()
+        except Exception:
+            pass
+        logger.info(f"[bili] 笔记已从回收站恢复: {Path(name).name}")
+        return {"ok": True, "data": {"name": Path(name).name}}
+
+    async def _panel_trash_purge(self, payload=None, **kwargs) -> dict:
+        """彻底删除回收站里的笔记（name 为空时清空全部）。"""
+        data = payload if isinstance(payload, dict) else {}
+        name = str(data.get("name") or kwargs.get("name") or "").strip()
+        trash = self.notes_dir / "notes" / "trash"
+        removed = 0
+        try:
+            targets = [trash / Path(name).name] if name else list(trash.glob("*.md"))
+            for p in targets:
+                if p.exists():
+                    p.unlink()
+                    removed += 1
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        logger.info(f"[bili] 回收站已清理 {removed} 篇")
+        return {"ok": True, "data": {"removed": removed}}
+
     async def _panel_note_delete(
         self, payload=None, name: str = "", with_memory: bool = False, **kwargs
     ) -> dict:
@@ -1257,6 +1326,8 @@ class BiliLearningPlugin(Star):
                 mm2 = _re.search(r"([^\\/\r\n]+\.md)\s*$", body)
                 if mm2:
                     nm = Path(mm2.group(1).strip()).name
+            if nm and not (Path(nd) / "notes" / nm).exists():
+                continue  # 笔记已删/已归档，概览不再列
             tags = []
             if nm and title not in bored:
                 try:

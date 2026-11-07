@@ -585,6 +585,11 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
       <section class="card fill">
         <h2>我的笔记<span class="hint" id="noteCount"></span></h2>
         <div class="search"><span style="color:var(--muted)">🔍</span><input id="q" placeholder="搜标题、标签…" autocomplete="off"></div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+          <button class="btn ghost" id="btnTrash" type="button">🗑 回收站<span id="trashN" style="color:var(--muted);margin-left:6px"></span></button>
+          <span class="hint" style="color:var(--muted);font-size:13px">删掉的笔记先放这里，可恢复或彻底删除</span>
+        </div>
+        <div id="trashList" style="display:none;margin-top:12px;max-height:46vh;overflow:auto"></div>
         <div class="notewrap">
           <div class="cal" id="cal"></div>
           <div class="notes" id="notes"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
@@ -711,6 +716,59 @@ function call(method, ep, payload){
     });
   }
   return fetchApi(method, ep, payload).then(unwrap);
+}
+function fmtTime(ts){
+  try{
+    var d = new Date(Number(ts) * 1000);
+    var p = function(n){ return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }catch(e){ return ""; }
+}
+async function loadTrash(force){
+  var box = document.getElementById("trashList");
+  var badge = document.getElementById("trashN");
+  if (!box) return;
+  var r = await call("GET", "trash", {});
+  var items = (r && r.data && r.data.items) || (r && r.items) || [];
+  if (badge) badge.textContent = items.length ? "(" + items.length + ")" : "";
+  if (!items.length){
+    box.innerHTML = '<div style="color:var(--muted);padding:16px">回收站是空的</div>';
+    return;
+  }
+  box.innerHTML = items.map(function(it){
+    var nm = encodeURIComponent(it.name);
+    return '<div style="background:#fff;border:1px solid #e6ecf7;border-radius:14px;padding:14px 16px;margin-bottom:10px">'
+      + '<div style="font-weight:700;font-size:15px;color:#22315b">' + esc(it.title || it.name) + '</div>'
+      + '<div style="color:#8b9bc4;font-size:13px;margin-top:4px">' + fmtTime(it.mtime) + " · " + (it.size/1024).toFixed(1) + ' KB</div>'
+      + '<div style="margin-top:10px;display:flex;gap:8px">'
+      + '<button class="btn" type="button" data-restore="' + nm + '">恢复</button>'
+      + '<button class="btn ghost" type="button" data-purge="' + nm + '">彻底删除</button>'
+      + '</div></div>';
+  }).join("");
+  box.querySelectorAll("[data-restore]").forEach(function(b){
+    b.onclick = function(){ trashAct("restore", decodeURIComponent(b.getAttribute("data-restore"))); };
+  });
+  box.querySelectorAll("[data-purge]").forEach(function(b){
+    b.onclick = function(){
+      var nm = decodeURIComponent(b.getAttribute("data-purge"));
+      if (!confirm("彻底删除后不能恢复：" + nm + "？")) return;
+      trashAct("purge", nm);
+    };
+  });
+}
+async function trashAct(act, name){
+  var ep = act === "restore" ? "trash_restore" : "trash_purge";
+  var r = await call("POST", ep, { name: name });
+  if (r && r.ok === false){ alert(r.error || "操作失败"); return; }
+  await loadTrash(true);
+  try { await refresh(true); } catch(e){}
+}
+function toggleTrash(){
+  var box = document.getElementById("trashList");
+  if (!box) return;
+  var on = box.style.display !== "none";
+  box.style.display = on ? "none" : "block";
+  if (!on) loadTrash();
 }
 function nfmt(n){
   n = Number(n || 0);
@@ -1610,7 +1668,10 @@ if ((location.search || "").indexOf("hit=1") >= 0){
 /* ===== 四页切换 ===== */
 var PAGE_TITLES = { overview: "概览", notes: "我的笔记", switches: "设置", interests: "兴趣" };
 var _curPage = "overview";
-function showPage(name){
+  var _btnTrash = document.getElementById("btnTrash");
+  if (_btnTrash) _btnTrash.onclick = toggleTrash;
+
+  function showPage(name){
   if (!PAGE_TITLES[name]) name = "overview";
   var _prevPage = _curPage;   _curPage = name;
   var i, ps = document.querySelectorAll(".page"), ns = document.querySelectorAll(".nv");
@@ -1679,6 +1740,7 @@ function renderOverviewNotes(){
   if (!PAGE_TITLES[start]) { try { start = localStorage.getItem("bili_page") || "overview"; } catch (e) { start = "overview"; } }
   if (!PAGE_TITLES[start]) start = "overview";
   showPage(start);
+  if (/[?&]trash=1/.test(location.search)){ try { showPage("notes"); toggleTrash(); } catch(e){} }
   bindSettings();
   (function setBrand() {
     try {
