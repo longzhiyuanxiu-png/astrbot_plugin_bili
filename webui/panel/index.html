@@ -274,6 +274,8 @@ a{color:var(--accent2);text-decoration:none}
 .guide-t{font-size:18px;font-weight:800;color:var(--text);margin:0 0 6px}
 .guide-d{font-size:13.5px;color:var(--text-2);line-height:1.7;margin:0 0 10px}
 .guide-acts{display:flex;gap:10px;margin-top:6px}
+
+.set-row:focus-within{border-color:#c9dbff;box-shadow:0 0 0 3px rgba(47,109,246,.08)}
 </style>
 
 <style>
@@ -1616,6 +1618,32 @@ function setCtrlHtml(it){
   }
   return html;
 }
+
+/* 设置项：一聚焦就滚到屏幕中间，省得往下翻 */
+document.addEventListener("focusin", function (e) {
+  var el = e.target;
+  if (!el || !el.closest) return;
+  var row = el.closest("#setList .set-row");
+  if (!row) return;
+  var box = row.getBoundingClientRect();
+  if (box.height > window.innerHeight * 0.75) return;
+  var mid = box.top + box.height / 2;
+  if (Math.abs(mid - window.innerHeight / 2) < 80) return;
+  row.scrollIntoView({ block: "center", behavior: "smooth" });
+});
+document.addEventListener("click", function (e) {
+  var el = e.target;
+  if (!el || !el.closest) return;
+  var row = el.closest("#setList .set-row");
+  if (!row) return;
+  if (el.closest("input,select,textarea,button,a")) return;
+  var first = row.querySelector("input,select,textarea");
+  if (first) {
+    first.focus({ preventScroll: true });
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+});
+
 function renderSettings(){
   if (!SET || !document.getElementById("setList")) return;
   var q = (setQ || "").toLowerCase();

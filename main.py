@@ -1118,6 +1118,75 @@ class BiliLearningPlugin(Star):
     async def _panel_schema(self, **kwargs) -> dict:
         return {"ok": True, "data": self._panel_schema_data()}
 
+    _NUM_RANGE = {
+        "runs_per_day": (1, 200),
+        "min_gap_minutes": (1, 1440),
+        "min_video_minutes": (0, 600),
+        "max_video_minutes": (1, 600),
+        "min_play": (0, 100000000),
+        "daily_token_budget": (0, 100000000),
+        "panel_web_port": (1024, 65535),
+        "voice_max_chars": (20, 1000),
+        "report_after_minutes": (0, 1440),
+        "like_daily_limit": (0, 200),
+        "coin_daily_limit": (0, 200),
+        "fav_daily_limit": (0, 200),
+        "action_min_interval_sec": (0, 3600),
+        "bili_dm_daily_limit": (0, 200),
+        "memory_per_note": (0, 20),
+        "extra_interest_min_hits": (1, 20),
+        "explore_every_n_rounds": (1, 100),
+        "explore_max_weight": (0, 5),
+        "keyword_cooldown_hours": (0, 720),
+        "max_transcribe_minutes": (1, 300),
+        "min_content_chars": (0, 200000),
+        "explore_min_content_chars": (0, 200000),
+        "danmaku_sample": (0, 5000),
+        "comments_top_n": (0, 200),
+        "subtitle_min_sim": (0, 1),
+        "whisper_threads": (0, 128),
+    }
+
+    def _validate_setting(self, key: str, val: Any) -> str:
+        """返回错误文案；空串表示通过。"""
+        rng = self._NUM_RANGE.get(key)
+        if rng:
+            lo, hi = rng
+            try:
+                num = float(val)
+            except Exception:
+                return "这里要填数字"
+            if not (lo <= num <= hi):
+                return f"填 {lo}–{hi} 之间的数（现在填的是 {val}）"
+        if key in ("time_windows", "quiet_hours"):
+            raw = str(val or "").strip()
+            if raw:
+                bad = [
+                    seg
+                    for seg in re.split(r"[,，]", raw)
+                    if seg.strip()
+                    and not re.fullmatch(r"\s*\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\s*", seg)
+                ]
+                if bad:
+                    return "时间要写成 12:30-22:00 这样，多段用逗号隔开"
+        if key == "daily_report_time":
+            raw = str(val or "").strip()
+            if raw and not re.fullmatch(r"\d{1,2}:\d{2}", raw):
+                return "日报时间写成 HH:MM 比如 21:30；留空 = 收工后自动发"
+        if key == "min_video_minutes":
+            try:
+                if int(float(val)) >= int(self.config.get("max_video_minutes") or 30):
+                    return "最短时长要小于最长时长"
+            except Exception:
+                pass
+        if key == "max_video_minutes":
+            try:
+                if int(float(val)) <= int(self.config.get("min_video_minutes") or 0):
+                    return "最长时长要大于最短时长"
+            except Exception:
+                pass
+        return ""
+
     async def _panel_config_set(self, **kwargs) -> dict:
         """POST {"key": "...", "value": ...}：改任意一项配置并落盘。"""
         payload = kwargs.get("payload")
@@ -1151,9 +1220,21 @@ class BiliLearningPlugin(Star):
             if t in ("bool", "boolean") or (not t and isinstance(cur, bool)):
                 val: Any = bool(value)
             elif t in ("int", "integer") or (not t and isinstance(cur, int)):
-                val = int(float(value))
+                sval = str(value).strip()
+                if not sval:
+                    return {"ok": False, "error": "这一项要填数字（留空不会改）", "data": {}}
+                try:
+                    val = int(float(sval))
+                except Exception:
+                    return {"ok": False, "error": f"「{sval}」不是数字，改不了", "data": {}}
             elif t in ("float", "double", "number"):
-                val = float(value)
+                sval = str(value).strip()
+                if not sval:
+                    return {"ok": False, "error": "这一项要填数字（留空不会改）", "data": {}}
+                try:
+                    val = float(sval)
+                except Exception:
+                    return {"ok": False, "error": f"「{sval}」不是数字，改不了", "data": {}}
             elif t in ("list", "array") or isinstance(cur, list):
                 if isinstance(value, list):
                     val = [str(x).strip() for x in value if str(x).strip()]
@@ -1175,6 +1256,9 @@ class BiliLearningPlugin(Star):
                         "error": f"只能填：{', '.join(str(o) for o in opts)}",
                         "data": {},
                     }
+            err = self._validate_setting(key, val)
+            if err:
+                return {"ok": False, "error": err, "data": {}}
             self.config[key] = val
             self.config.save_config()
             logger.info(f"[bili] 面板改设置 {key} = {val!r}")

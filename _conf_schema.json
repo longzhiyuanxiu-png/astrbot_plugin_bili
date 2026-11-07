@@ -28,24 +28,6 @@
         "hint": "长期记忆插件（livingmemory）里的人格 ID，写在那个插件的配置里。\n只有一个助手时留空即可（落到 default）；养了多个人格时，去「插件 → 长期记忆 → 配置」看 persona_id，原样填进来。",
         "default": ""
       },
-      "hf_endpoint": {
-        "type": "string",
-        "description": "HuggingFace 镜像地址",
-        "hint": "留空不改环境；国内下载 whisper 模型可填 https://hf-mirror.com",
-        "default": ""
-      },
-      "cookie_path": {
-        "type": "string",
-        "description": "B站登录 cookie 文件路径",
-        "hint": "推荐扫码：直接发 /bili 登录，扫完自动存到下面这个路径。\n手动也行：浏览器登录 B站 → F12 → Application/Cookies，取 SESSDATA、bili_jct、DedeUserID、buvid3 四个字段，\n写成 JSON 存成文件：{\"SESSDATA\":\"...\",\"bili_jct\":\"...\",\"DedeUserID\":\"...\",\"buvid3\":\"...\"}\n留空则用插件目录下的 bili-cookie.json。",
-        "default": ""
-      },
-      "deepseek_key_path": {
-        "type": "string",
-        "description": "DeepSeek key 文件路径（用于查余额）",
-        "hint": "只用于面板显示余额，不填也能正常学习。\n获取：登录 platform.deepseek.com → API keys → 创建 → 复制 sk- 开头那串，粘到一个 txt 文件里，把路径填这里。\n留空则找插件目录下的 deepseek-key.txt。",
-        "default": ""
-      },
       "enabled": {
         "type": "bool",
         "description": "启用插件",
@@ -75,6 +57,54 @@
         "description": "独立面板端口",
         "default": 4123,
         "hint": "浏览器访问 http://127.0.0.1:端口；端口冲突就换一个"
+      }
+    }
+  },
+  "paths": {
+    "description": "路径与文件",
+    "type": "object",
+    "items": {
+      "cookie_path": {
+        "type": "string",
+        "description": "B站登录 cookie 文件路径",
+        "hint": "推荐直接发 /bili 登录，扫完自动存到这里。手动也行：浏览器登录 B站 → F12 → Application/Cookies，取 SESSDATA、bili_jct、DedeUserID、buvid3 四个字段，写成 JSON 存成文件：{\"SESSDATA\":\"...\",\"bili_jct\":\"...\",\"DedeUserID\":\"...\",\"buvid3\":\"...\"}。留空则用插件目录下的 bili-cookie.json。",
+        "default": ""
+      },
+      "deepseek_key_path": {
+        "type": "string",
+        "description": "DeepSeek key 文件路径（用于查余额）",
+        "hint": "只用于面板显示余额，不填也能正常学习。\n获取：登录 platform.deepseek.com → API keys → 创建 → 复制 sk- 开头那串，粘到一个 txt 文件里，把路径填这里。\n留空则找插件目录下的 deepseek-key.txt。",
+        "default": ""
+      },
+      "notes_dir": {
+        "type": "string",
+        "description": "笔记存在哪",
+        "default": "",
+        "hint": "笔记、每日汇总、索引都写在这里。留空 = 插件目录下的 notes/。"
+      },
+      "whisper_model": {
+        "type": "string",
+        "description": "转写模型",
+        "default": "small",
+        "hint": "填模型名（tiny/base/small/medium/large-v3）或本地权重目录的完整路径。medium 中文效果好但要下载 1.4 GB，small 更快但专名容易错。"
+      },
+      "whisper_cache_dir": {
+        "type": "string",
+        "description": "模型和临时文件放哪",
+        "default": "",
+        "hint": "模型下载缓存放这儿。留空 = 用户目录下的 .cache/bili_whisper。"
+      },
+      "ffmpeg_path": {
+        "type": "string",
+        "description": "ffmpeg 在哪",
+        "default": "ffmpeg",
+        "hint": "ffmpeg 可执行文件路径。系统 PATH 里已有就保持默认 ffmpeg。"
+      },
+      "hf_endpoint": {
+        "type": "string",
+        "description": "HuggingFace 镜像地址",
+        "hint": "留空不改环境；国内下载 whisper 模型慢的话填 https://hf-mirror.com",
+        "default": ""
       }
     }
   },
@@ -118,12 +148,6 @@
         "description": "视频最长几分钟",
         "default": 30,
         "hint": "太长的不看（直播回放、超长合集）；转写很慢，别设太高"
-      },
-      "min_play": {
-        "type": "int",
-        "description": "视频最低播放量",
-        "default": 1000,
-        "hint": "低于这个播放量的不学（0 = 不限）。冷门兴趣别设太高，否则搜不到合适视频；建议 1000–20000"
       },
       "daily_token_budget": {
         "type": "int",
@@ -191,6 +215,12 @@
         "description": "不看的 UP 主",
         "hint": "填 UP 的 UID（数字）或名字都行，多个用逗号或回车隔开；命中就跳过，你自己点名的视频不受影响。",
         "default": []
+      },
+      "min_play": {
+        "type": "int",
+        "description": "视频最低播放量",
+        "default": 1000,
+        "hint": "低于这个播放量的不学（0 = 不限）。冷门兴趣别设太高，否则搜不到合适视频；建议 1000–20000。"
       },
       "block_keywords": {
         "type": "list",
@@ -261,12 +291,6 @@
         "default": false,
         "hint": "需要本地的 faster-whisper 模型；慢，但没字幕也看得懂"
       },
-      "whisper_model": {
-        "type": "string",
-        "description": "转写模型",
-        "default": "small",
-        "hint": "可以填名字（tiny / small / medium），也可以填模型目录的绝对路径；本机现在用的是 medium"
-      },
       "max_transcribe_minutes": {
         "type": "int",
         "description": "最多转写多长的视频（分钟）",
@@ -296,18 +320,6 @@
         "description": "探索轮的内容门槛（字）",
         "hint": "探索轮抽中的弱兴趣词，读到这么多字就算数，给歌单/音乐类留口子；普通视频仍用上面那条",
         "default": 120
-      },
-      "whisper_cache_dir": {
-        "type": "string",
-        "description": "模型和临时文件放哪",
-        "default": "",
-        "hint": "留空则用 ~/.cache/bili_whisper"
-      },
-      "ffmpeg_path": {
-        "type": "string",
-        "description": "ffmpeg 在哪",
-        "default": "ffmpeg",
-        "hint": "留空或填 ffmpeg 表示用 PATH 里的 ffmpeg"
       },
       "danmaku_enabled": {
         "type": "bool",
@@ -478,12 +490,6 @@
     "description": "笔记与记忆",
     "hint": "笔记存在哪、要不要写进长期记忆",
     "items": {
-      "notes_dir": {
-        "type": "string",
-        "description": "笔记存在哪",
-        "default": "",
-        "hint": "留空则放在插件目录下的 notes/；已有笔记可指向原目录"
-      },
       "memory_write": {
         "type": "bool",
         "description": "把笔记写进长期记忆",
