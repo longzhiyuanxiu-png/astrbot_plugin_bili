@@ -7,3 +7,6 @@ Thumbs.db
 data/
 
 notes/
+
+# README 预览页（本地生成，不入库）
+PREVIEW.html

@@ -89,8 +89,6 @@ AstrBot 后台 → 插件 → B站学习 → 配置，找到「开独立面板�
 
 把日志原文、你的系统（Windows/macOS/Linux）、是不是云服务器这三样一起给，基本一次就能解决。
 
-<p align="center"><img src="docs/settings.jpg" width="760"></p>
-
 ## 安装
 
 1. 在 AstrBot 后台 → **插件** → **从文件安装**，选择 `astrbot_plugin_bili-x.y.z.zip`
@@ -98,46 +96,17 @@ AstrBot 后台 → 插件 → B站学习 → 配置，找到「开独立面板�
    - 国内网络慢的话，设置里把 **HuggingFace 镜像** 填成 `https://hf-mirror.com`（默认已填）
 3. 重载插件，进入 **设置 → B站学习** 完成配置（最少只要登录一次）
 
-## ⚠️ 先填必填项（不做的话大概率跑不起来）
+## ⚠️ 先填必填项（只填这几项就能跑）
 
-打开「B站学习 → 设置 → 必填」，这五项在面板里都有说明，这里再写一遍怎么拿到：
+| 设置项 | 在哪 | 说明 |
+| --- | --- | --- |
+| **B站登录 cookie 文件路径** | 设置 → 必填 | 唯一必须的一项。推荐直接发 `/bili 登录` 扫码，自动存盘 |
+| 她的名字 | 设置 → 必填 | 写笔记、日报抬头用它，默认「小助手」 |
+| 私信发给谁（B站 UID） | 设置 → 必填 | 你在B站的主号 UID；不填就不发私信 |
 
-| 配置 | 怎么获取 | 不填会怎样 |
-|---|---|---|
-| 她的名字 | 随便起，写笔记、日报抬头、索引标题都用它 | 笔记落款是「小助手」 |
-| 长期记忆用的 persona | 长期记忆插件（livingmemory）配置里的 `persona_id`；只养一个助手就留空 | 记忆写到 `default` 人格下 |
-| B站登录 cookie 路径 | **推荐**：直接发 `/bili 登录` 扫码，自动存好；手动：浏览器登录 B站 → F12 → Application/Cookies，取 `SESSDATA`、`bili_jct`、`DedeUserID`、`buvid3` 存成 JSON | 搜不了视频、发不了私信 |
-| 私信发给谁（B站 UID） | 打开自己的 B站主页，地址栏 `space.bilibili.com/` 后面那串数字 | 学完不发私信 |
-| DeepSeek key 路径 | 登录 platform.deepseek.com → API keys → 创建，把 `sk-` 开头那串存成 txt | 面板不显示余额，其他照常 |
-
-> 私信还有个前提：你的 B站大号要和她的小号**先互相关注**，否则私信会进「陌生人消息」，界面不提醒。
-
-## 兴趣方向怎么选
-
-**第一次装不用配也能跑**：`interest_topics` 默认是空的，面板的「兴趣」页会弹一张引导卡，按方向勾选（动漫 / 影视 / 游戏 / 科技 / 知识 / 音乐 / 生活 / 运动 / 二次元）点「保存并开始」，就自动展开成带权重的种子词。
-
-不选也行——点「先让她自己探索」，她会从 B站热门里随便学几天，学出来的标签会以每轮 ×0.94、连续 3 次命中才留下的方式自然长成「自己拓展的」，权重到 2.0 就转正成种子。
-
-想改方向，随时点右下角「重新选方向」；想从零开始，点「重置兴趣」（会清空种子、拓展词和自学权重，笔记不受影响）。
-
-<p align="center"><img src="docs/interests.jpg" width="720"></p>
-
-## 首次配置
-
-| 配置项 | 说明 |
-| --- | --- |
-| `bot_name` | 她的名字（笔记里的第一人称、日报抬头都用它） |
-| `memory_persona` | 写记忆时用的人格 ID（默认 `default`） |
-| `cookie_path` | B 站登录凭证 json 路径，留空则用插件目录下的 `bili-cookie.json` |
-| `notes_dir` | 笔记根目录，默认插件目录下的 `notes/` |
-| `panel_title` | 面板左上角显示的名字，留空用 `bot_name` |
-| `panel_subtitle` | 面板名字下面那行小字，默认「B站学习面板」 |
-| `whisper_model` | `tiny/base/small/medium/large-v3` 或本地模型目录 |
-| `whisper_device` | `auto`（有 N 卡自动用 GPU）/ `cuda` / `cpu` |
-| `whisper_threads` | 转写用几个 CPU 线程，0 = 自动（核数/4，最多 8） |
-| `deepseek_key_path` | 可选：一个只放 API Key 的文本文件（用于查余额；留空则用 AstrBot 的模型提供商） |
-
-登录：私聊发 `/bili 登录`，扫码即可（会保存到 `cookie_path`）。
+其余项都有默认值，**不配也能跑**：
+- 长期记忆用的 persona：装了 `astrbot_plugin_livingmemory` 才需要，没装自动跳过
+- DeepSeek key 路径：只用于在面板显示余额，不填也能正常学习（用的是 AstrBot 自己的模型）
 
 ## 第一次运行会发生什么
 
@@ -150,24 +119,15 @@ AstrBot 后台 → 插件 → B站学习 → 配置，找到「开独立面板�
 
 所以你只需要：**装插件 → QQ 发 `/bili 登录` 扫码**，之后它会自己开始学。
 
-## 想要更快/更准（可选）
+## 兴趣方向怎么选
 
-| 方案 | 要做的事 | 效果 |
-|---|---|---|
-| 省流量/低配 | 设置里把「转写模型」改成 `small` | 首装从 1.5 GB 降到 460 MB，速度快 2–3 倍，专名准确率略降 |
-| 快 5–10 倍 | 有 NVIDIA 显卡：装 `nvidia-cublas-cu12`、`nvidia-cudnn-cu12`，设备留 `auto` | 一轮 8 分钟 → 约 80 秒 |
-| 最准 | GPU + `large-v3`（需 8 GB 以上显存） | 专名和数字更准，一轮约 2 分钟 |
+**第一次装不用配也能跑**：`interest_topics` 默认是空的，面板的「兴趣」页会弹一张引导卡，按方向勾选（动漫 / 影视 / 游戏 / 科技 / 知识 / 音乐 / 生活 / 运动 / 二次元）点「保存并开始」，就自动展开成带权重的种子词。
 
-### 开启 GPU 转写
+不选也行——点「先让她自己探索」，她会从 B站热门里随便学几天，学出来的标签会以每轮 ×0.94、连续 3 次命中才留下的方式自然长成「自己拓展的」，权重到 2.0 就转正成种子。
 
-1. `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`
-2. 设置 → 路径与文件 →「转写设备」保持 `auto`
-3. 看日志出现 `转写模型已加载（medium / cuda/float16` 就是成功了；失败会自动退回 CPU
+想改方向，随时点右下角「重新选方向」；想从零开始，点「重置兴趣」（会清空种子、拓展词和自学权重，笔记不受影响）。
 
-### 模型手动下载 / 离线复用
-
-- 下载好的模型放在 `设置 → 路径与文件 →「模型和临时文件放哪」` 指向的目录里，文件名形如 `faster-whisper-medium/`
-- 也可以把别人下好的 `faster-whisper-medium` 文件夹整个拷过来，把「转写模型」填成该文件夹的完整路径即可跳过下载
+<p align="center"><img src="docs/interests.jpg" width="720"></p>
 
 ## 每日汇报 & 让她聊聊今天看的
 
@@ -205,6 +165,42 @@ AstrBot 后台 → 插件 → B站学习 → 配置，找到「开独立面板�
 | `/bili 登录` / `/bili 状态` / `/bili 帮助` | 登录、状态、帮助 |
 
 > 需要 @ 或在消息前加唤醒前缀（默认 `/`），具体看 AstrBot 的平台设置。
+
+## 首次配置
+
+| 配置项 | 说明 |
+| --- | --- |
+| `bot_name` | 她的名字（笔记里的第一人称、日报抬头都用它） |
+| `memory_persona` | 写记忆时用的人格 ID（默认 `default`） |
+| `cookie_path` | B 站登录凭证 json 路径，留空则用插件目录下的 `bili-cookie.json` |
+| `notes_dir` | 笔记根目录，默认插件目录下的 `notes/` |
+| `panel_title` | 面板左上角显示的名字，留空用 `bot_name` |
+| `panel_subtitle` | 面板名字下面那行小字，默认「B站学习面板」 |
+| `whisper_model` | `tiny/base/small/medium/large-v3` 或本地模型目录 |
+| `whisper_device` | `auto`（有 N 卡自动用 GPU）/ `cuda` / `cpu` |
+| `whisper_threads` | 转写用几个 CPU 线程，0 = 自动（核数/4，最多 8） |
+| `deepseek_key_path` | 可选：一个只放 API Key 的文本文件（用于查余额；留空则用 AstrBot 的模型提供商） |
+
+登录：私聊发 `/bili 登录`，扫码即可（会保存到 `cookie_path`）。
+
+## 想要更快/更准（可选）
+
+| 方案 | 要做的事 | 效果 |
+|---|---|---|
+| 省流量/低配 | 设置里把「转写模型」改成 `small` | 首装从 1.5 GB 降到 460 MB，速度快 2–3 倍，专名准确率略降 |
+| 快 5–10 倍 | 有 NVIDIA 显卡：装 `nvidia-cublas-cu12`、`nvidia-cudnn-cu12`，设备留 `auto` | 一轮 8 分钟 → 约 80 秒 |
+| 最准 | GPU + `large-v3`（需 8 GB 以上显存） | 专名和数字更准，一轮约 2 分钟 |
+
+### 开启 GPU 转写
+
+1. `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12`
+2. 设置 → 路径与文件 →「转写设备」保持 `auto`
+3. 看日志出现 `转写模型已加载（medium / cuda/float16` 就是成功了；失败会自动退回 CPU
+
+### 模型手动下载 / 离线复用
+
+- 下载好的模型放在 `设置 → 路径与文件 →「模型和临时文件放哪」` 指向的目录里，文件名形如 `faster-whisper-medium/`
+- 也可以把别人下好的 `faster-whisper-medium` 文件夹整个拷过来，把「转写模型」填成该文件夹的完整路径即可跳过下载
 
 ## 依赖说明
 

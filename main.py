@@ -1333,11 +1333,9 @@ class BiliLearningPlugin(Star):
                     }
                 )
         required_keys = [
-            "bot_name",
-            "memory_persona",
             "cookie_path",
+            "bot_name",
             "bili_dm_target",
-            "deepseek_key_path",
         ]
         picked = []
         for g in groups:
@@ -1355,7 +1353,7 @@ class BiliLearningPlugin(Star):
         if picked:
             groups.insert(0, {
                 "key": "required",
-                "title": "必填（首次使用先填这里）",
+                "title": "必填（只填这几项就能跑）",
                 "items": picked,
             })
 
