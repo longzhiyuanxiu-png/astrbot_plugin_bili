@@ -1569,6 +1569,60 @@ class BiliLearningPlugin(Star):
         self._log("后台页面点了「立刻学一轮」")
         return {"ok": True, "data": {"started": True}}
 
+    def _maintain_daily(self, force: bool = False) -> Dict[str, int]:
+        """每天跑一次的数据清理：日报图 60 天、回收站 30 天、usage 历史 180 天。"""
+        today = self._today()
+        if not force and self.state.get("_maint_date") == today:
+            return {}
+        stat = {"daily": 0, "trash": 0, "usage": 0}
+        now = time.time()
+        try:
+            d = self.notes_dir / "daily"
+            if d.exists():
+                for f in d.glob("*.png"):
+                    try:
+                        if now - f.stat().st_mtime > 60 * 86400:
+                            f.unlink()
+                            stat["daily"] += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        try:
+            t = self.notes_dir / "notes" / "trash"
+            if t.exists():
+                for f in t.rglob("*.md"):
+                    try:
+                        if now - f.stat().st_mtime > 30 * 86400:
+                            f.unlink()
+                            stat["trash"] += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        try:
+            usage = self.state.get("usage") or {}
+            if isinstance(usage, dict) and len(usage) > 200:
+                keep = sorted(usage.keys())[-180:]
+                self.state["usage"] = {k: usage[k] for k in keep}
+                stat["usage"] = len(usage) - len(keep)
+        except Exception:
+            pass
+        self.state["_maint_date"] = today
+        try:
+            self._save_state()
+        except Exception:
+            pass
+        if any(stat.values()):
+            self._log("日常清理：" + "，".join(f"{k} {v}" for k, v in stat.items() if v))
+        return stat
+
+    async def _panel_maintain(self, **kwargs) -> dict:
+        try:
+            return {"ok": True, "data": self._maintain_daily(force=True)}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "data": {}}
+
     async def _panel_report(self, **kwargs) -> dict:
         """从后台页面发一条日报（可以带自定义文本）。"""
         try:
@@ -1779,6 +1833,14 @@ class BiliLearningPlugin(Star):
     def _log(self, msg: str) -> None:
         line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n"
         try:
+            try:
+                if self.log_path.exists() and self.log_path.stat().st_size > 2 * 1024 * 1024:
+                    bak = self.log_path.with_name("activity.log.1")
+                    if bak.exists():
+                        bak.unlink()
+                    self.log_path.rename(bak)
+            except Exception:
+                pass
             with self.log_path.open("a", encoding="utf-8") as fp:
                 fp.write(line)
         except Exception:
@@ -4170,6 +4232,10 @@ class BiliLearningPlugin(Star):
     async def _tick(self) -> None:
         if not self.config.get("enabled", True) or self.state.get("paused"):
             return
+        try:
+            self._maintain_daily()
+        except Exception:
+            pass
         await self._daily_login_check()
         if self.api.in_cooldown:
             await self._risk_notice()
