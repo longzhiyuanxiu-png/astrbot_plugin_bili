@@ -927,7 +927,9 @@ class Learner:
 
         stamp = datetime.now().strftime("%Y%m%d-%H%M")
         safe = re.sub(r"[\\/:*?\"<>|]+", "_", (note.get("title") or info.get("title") or "笔记"))[:40]
-        path = notes_dir / f"{stamp}_{safe}.md"
+        year_dir = notes_dir / str(datetime.now().year)
+        year_dir.mkdir(parents=True, exist_ok=True)
+        path = year_dir / f"{stamp}_{safe}.md"
 
         if note_is_relevant(note) is False and not pack.get("user_picked"):
             one_line = str(note.get("summary") or "").strip() or "（没细看，跟当前兴趣不搭）"

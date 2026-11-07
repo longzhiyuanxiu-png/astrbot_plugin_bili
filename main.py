@@ -754,6 +754,44 @@ class BiliLearningPlugin(Star):
             v = ""
         return v or "主人"
 
+    def _notes_meta_cache_path(self) -> Path:
+        return self.notes_dir / "notes" / "meta-cache.json"
+
+    def _notes_meta_cached(self, files: List[Path]) -> List[Dict[str, Any]]:
+        """按 (文件名|mtime|大小) 缓存笔记元信息，避免每次请求都开文件读标题/标签。"""
+        cache: Dict[str, Any] = {}
+        cp = self._notes_meta_cache_path()
+        try:
+            if cp.exists():
+                cache = json.loads(cp.read_text(encoding="utf-8")) or {}
+        except Exception:
+            cache = {}
+        out: List[Dict[str, Any]] = []
+        fresh: Dict[str, Any] = {}
+        changed = False
+        for p in files:
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            key = f"{p.name}|{int(st.st_mtime)}|{st.st_size}"
+            hit = cache.get(key)
+            if hit is None:
+                try:
+                    hit = self._panel_note_meta(p)
+                except Exception:
+                    continue
+                changed = True
+            fresh[key] = hit
+            out.append(hit)
+        if changed or len(fresh) != len(cache):
+            try:
+                cp.parent.mkdir(parents=True, exist_ok=True)
+                cp.write_text(json.dumps(fresh, ensure_ascii=False), encoding="utf-8")
+            except Exception as exc:
+                logger.warning(f"[bili] 写笔记元信息缓存失败: {exc!r}")
+        return out
+
     async def _panel_notes(self, **kwargs) -> dict:
         try:
             files = [
@@ -763,7 +801,7 @@ class BiliLearningPlugin(Star):
                 )
                 if p.name != "index.md"
             ]
-            items = [self._panel_note_meta(p) for p in files[:1000]]
+            items = self._notes_meta_cached(files[:5000])
             archive_dir = self.notes_dir / "notes" / "archive"
             archived = (
                 len(list(archive_dir.rglob("*.md"))) if archive_dir.exists() else 0
@@ -1854,7 +1892,7 @@ class BiliLearningPlugin(Star):
         notes = self.notes_dir / "notes"
         if not notes.exists():
             return (0, 0)
-        files = [p for p in notes.glob("*.md") if p.name != "index.md"]
+        files = self._md_files(notes)
         if not files:
             return (0, 0)
         newest = max(int(p.stat().st_mtime) for p in files)
@@ -2498,7 +2536,7 @@ class BiliLearningPlugin(Star):
 
         notes_dir = self.notes_dir / "notes"
         fixed, failed, skipped = 0, [], 0
-        files = [p for p in sorted(notes_dir.glob("*.md")) if p.name != "index.md"]
+        files = sorted(self._md_files(notes_dir))
         for p in files:
             try:
                 text = p.read_text(encoding="utf-8")
@@ -2548,7 +2586,7 @@ class BiliLearningPlugin(Star):
 
         fixed, skipped, failed = 0, 0, []
         _nd = Path(self.notes_dir) / "notes"
-        for p in sorted(_nd.glob("*.md")):
+        for p in sorted(self._md_files(_nd)):
             if p.name == "index.md":
                 continue
             try:
@@ -2598,7 +2636,7 @@ class BiliLearningPlugin(Star):
         added, skipped, failed = [], [], []
         for bvid in bvids:
             target = None
-            for f in notes_dir.glob("*.md"):
+            for f in self._md_files(notes_dir):
                 try:
                     if bvid in f.read_text(encoding="utf-8", errors="ignore"):
                         target = f
@@ -2784,7 +2822,7 @@ class BiliLearningPlugin(Star):
             return []
         today = self._today()
         out: List[dict] = []
-        for p in d.glob("*.md"):
+        for p in self._md_files(d):
             if p.name == "index.md":
                 continue
             try:
@@ -3204,6 +3242,15 @@ class BiliLearningPlugin(Star):
         )
 
     # ------------------------------------------------------------ 笔记与报告
+
+    def _md_files(self, d: Path) -> List[Path]:
+        """列出目录下（含年份子目录）的笔记 md，排除回收站/归档/索引。"""
+        if not d.exists():
+            return []
+        return [
+            p for p in d.rglob("*.md")
+            if "trash" not in p.parts and "archive" not in p.parts and p.name != "index.md"
+        ]
 
     def _notes_files(self) -> List[Path]:
         d = self.notes_dir / "notes"
@@ -4162,7 +4209,7 @@ class BiliLearningPlugin(Star):
         if not notes_dir.exists():
             return 0
         entries = []
-        for p in notes_dir.glob("*.md"):
+        for p in self._md_files(notes_dir):
             if p.name == "index.md":
                 continue
             try:

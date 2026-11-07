@@ -500,6 +500,9 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
 .interest .ops button:hover{border-color:var(--accent);color:var(--accent)}
 .int-add{display:flex;gap:8px;margin-top:12px}
 .int-add input{flex:1;min-width:0;height:34px;border:1px solid var(--line);border-radius:9px;padding:0 10px;font-size:13.5px;background:#fff;color:var(--text)}
+.pager{display:flex;align-items:center;gap:12px;justify-content:center;margin:14px 2px 4px}
+.pager .pg-info{font-size:12.5px;color:#8b9bc4}
+.pager .btn[disabled]{opacity:.45;cursor:default}
 </style>
 </head>
 <script>window.onerror=function(m,src,l,c){try{document.title="ERR "+m+" @"+l+":"+c;}catch(e){}return false;};</script>
@@ -588,7 +591,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
       <section class="card fill">
         <h2>我的笔记<span class="hint" id="noteCount"></span></h2>
         <div class="search"><span style="color:var(--muted)">🔍</span><input id="q" placeholder="搜标题、标签…" autocomplete="off"></div>
-        <div class="notewrap"><div class="leftcol"><div class="cal" id="cal"></div><div id="trashBox" style="margin-top:12px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="btnTrash" type="button">🗑 回收站<span id="trashN" style="margin-left:6px;color:#8b9bc4;font-weight:600">0</span></button><span style="color:#8b9bc4;font-size:12px">删掉的先放这儿，可恢复</span></div><div id="trashList" style="display:none;margin-top:8px;max-height:34vh;overflow:auto"></div></div></div><div class="notes" id="notes"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div></div>
+        <div class="notewrap"><div class="leftcol"><div class="cal" id="cal"></div><div id="trashBox" style="margin-top:12px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="btnTrash" type="button">🗑 回收站<span id="trashN" style="margin-left:6px;color:#8b9bc4;font-weight:600">0</span></button><span style="color:#8b9bc4;font-size:12px">删掉的先放这儿，可恢复</span></div><div id="trashList" style="display:none;margin-top:8px;max-height:34vh;overflow:auto"></div></div></div><div class="notes" id="notes"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div><div id="notesPager" class="pager" style="display:none"></div></div>
     </section>
     </section>
 
@@ -1106,6 +1109,7 @@ function cleanTags(list){
   return (list || []).map(function(t){ return String(t).trim(); })
     .filter(function(t){ return t && !/^[（(]?无[）)]?$/.test(t) && t !== "-" && t !== "—"; });
 }
+var NOTE_PAGE = 60, notePage = 1, notePageSig = "";
 function renderNotes(){
   var nowSec = Math.floor(Date.now() / 1000);
   var today0 = new Date(); today0.setHours(0, 0, 0, 0);
@@ -1119,12 +1123,17 @@ function renderNotes(){
     }
     return true;
   });
+  var sig = String(query || "") + "|" + String(noteDay || "");
+  if (sig !== notePageSig){ notePageSig = sig; notePage = 1; }
+  var pages = Math.max(1, Math.ceil(list.length / NOTE_PAGE));
+  if (notePage > pages) notePage = pages;
+  var pageStart = (notePage - 1) * NOTE_PAGE;
   $("noteCount").textContent = list.length + " / " + notes.length + " 篇";
   if (!list.length){
     $("notes").innerHTML = '<div class="empty">' + (notes.length ? "没搜到，换个词试试" : "今天还没吃 token，有点饿") + '</div>';
     return;
   }
-  $("notes").innerHTML = list.slice(0, 120).map(function(n){
+  $("notes").innerHTML = list.slice(pageStart, pageStart + NOTE_PAGE).map(function(n){
     var tg = cleanTags(String(n.tags || "").split(/[、,，;；]/)).slice(0, 4);
     var chips = tg.map(function(t){ return '<span class="oi-tag">' + esc(t) + '</span>'; }).join('');
     var line2 = n.short ? '<span class="badge-bored">不感兴趣</span>' : chips;
@@ -1133,6 +1142,26 @@ function renderNotes(){
       '<div class="m"><span class="oi-time">' + fdate(n.mtime) + '</span>' + (n.pub && n.pub !== '—' ? '<span class="oi-time oi-pub">发布 ' + n.pub + '</span>' : '') + '<span class="oi-time">' + (n.size/1024).toFixed(1) + ' KB</span></div>' +
       (line2 ? '<div class="tgline">' + line2 + '</div>' : '') + '</div>';
   }).join("");
+  var pager = $("notesPager");
+  if (pager){
+    if (pages <= 1){ pager.style.display = "none"; }
+    else {
+      pager.style.display = "flex";
+      pager.innerHTML = '<button class="btn ghost" data-pg="prev"' + (notePage <= 1 ? " disabled" : "") + '>‹ 上一页</button>' +
+        '<span class="pg-info">第 ' + notePage + ' / ' + pages + ' 页 · 共 ' + list.length + ' 篇</span>' +
+        '<button class="btn ghost" data-pg="next"' + (notePage >= pages ? " disabled" : "") + '>下一页 ›</button>';
+    }
+  }
+  if (!window.__pagerBound){
+    window.__pagerBound = 1;
+    document.addEventListener("click", function(e){
+      var b = e.target.closest && e.target.closest("#notesPager [data-pg]");
+      if (!b) return;
+      var d = b.getAttribute("data-pg");
+      notePage += (d === "next" ? 1 : -1);
+      renderNotes();
+    });
+  }
   try { renderOverviewNotes(); } catch (e) {}
 }
 function mdToHtml(md){
