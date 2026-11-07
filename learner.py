@@ -336,68 +336,70 @@ class Learner:
 
         # 同一个词的第 1 页、按播放量，几乎每次都是同一批 20 条；
         # 换成别的排序/翻到第 2、3 页，结果基本不重合（实测重合 0 条）。
-        orders = ["click", "pubdate", "totalrank"]
+        # 每个词按固定顺序试 3 组（排序, 页），命中即停：
+        # click 第 1 页最容易出高播放的解说，totalrank 是综合热度，pubdate 兜底最新。
         keywords = self._keywords() or ["音乐"]
         last_reason = ""
         for keyword in keywords:
-            order = random.choice(orders)
-            page = random.randint(1, 3)
-            items = []
-            try:
-                items = await self.api.search_videos(
-                    keyword, page=page, order=order, duration=dur_code
+            combos = [("click", 1), ("totalrank", 1), ("pubdate", random.randint(1, 3))]
+            kw_cold = 0
+            for order, page in combos:
+                items = []
+                try:
+                    items = await self.api.search_videos(
+                        keyword, page=page, order=order, duration=dur_code
+                    )
+                    if not items and dur_code:
+                        items = await self.api.search_videos(keyword, page=page, order=order)
+                    if not items:
+                        items = await self.api.search_videos(keyword)
+                except Exception as exc:
+                    logger.warning(f"[bili] 搜索「{keyword}」失败: {exc!r}")
+                    continue
+
+                pool = []
+                too_cold = 0
+                for it in items:
+                    if not it.get("bvid") or it["bvid"] in seen or it["bvid"] in rejected:
+                        continue
+                    sec = parse_duration(it.get("duration"))
+                    if sec and (sec < min_sec or sec > max_sec):
+                        continue
+                    if self._blocked(it.get("title") or "", it.get("tag") or ""):
+                        continue
+                    if self._blocked_up(it.get("author") or "", it.get("mid")):
+                        logger.info(f"[bili] 跳过不看的 UP 主：{it.get('author')}")
+                        continue
+                    if min_play and int(it.get("play") or 0) < min_play:
+                        too_cold += 1
+                        continue
+                    pool.append(it)
+                kw_cold += too_cold
+
+                if not pool:
+                    logger.info(
+                        f"[bili]「{keyword}」（{order} 第 {page} 页 {len(items)} 条）没有合适的，继续试下一组"
+                    )
+                    continue
+
+                self._mark_keyword(keyword, True)
+                self.last_keyword = keyword
+                preferred = [
+                    x
+                    for x in pool
+                    if self._prefer_up(x.get("author") or "", x.get("mid"))
+                ]
+                chosen = dict(preferred[0] if preferred else random.choice(pool))
+                chosen["keyword"] = keyword
+                return (
+                    chosen,
+                    f"从「{keyword}」里挑了 1 个（{order} 第 {page} 页，候选 {len(pool)} 条）",
                 )
-                if not items and dur_code:
-                    items = await self.api.search_videos(keyword, page=page, order=order)
-                if not items:
-                    items = await self.api.search_videos(keyword)
-            except Exception as exc:
-                logger.warning(f"[bili] 搜索「{keyword}」失败: {exc!r}")
-                self._mark_keyword(keyword, False)
-                last_reason = f"搜「{keyword}」时出错了"
-                continue
 
-            pool = []
-            too_cold = 0
-            for it in items:
-                if not it.get("bvid") or it["bvid"] in seen or it["bvid"] in rejected:
-                    continue
-                sec = parse_duration(it.get("duration"))
-                if sec and (sec < min_sec or sec > max_sec):
-                    continue
-                if self._blocked(it.get("title") or "", it.get("tag") or ""):
-                    continue
-                if self._blocked_up(it.get("author") or "", it.get("mid")):
-                    logger.info(f"[bili] 跳过不看的 UP 主：{it.get('author')}")
-                    continue
-                if min_play and int(it.get("play") or 0) < min_play:
-                    too_cold += 1
-                    continue
-                pool.append(it)
-
-            if not pool:
-                self._mark_keyword(keyword, False)
-                reason_cold = f"，{too_cold} 条播放量低于 {min_play}" if too_cold else ""
-                last_reason = f"「{keyword}」里没找到合适的新视频（可能都看过、时长不合适{reason_cold}）"
-                logger.info(
-                    f"[bili] {last_reason}（{order} 第 {page} 页 {len(items)} 条）"
-                )
-                continue
-
-            self._mark_keyword(keyword, True)
-            self.last_keyword = keyword
-            # 优先 UP 主排在前面，其余随机
-            preferred = [
-                x
-                for x in pool
-                if self._prefer_up(x.get("author") or "", x.get("mid"))
-            ]
-            chosen = dict(preferred[0] if preferred else random.choice(pool))
-            chosen["keyword"] = keyword
-            return (
-                chosen,
-                f"从「{keyword}」里挑了 1 个（{order} 第 {page} 页，候选 {len(pool)} 条）",
-            )
+            self._mark_keyword(keyword, False)
+            reason_cold = f"，{kw_cold} 条播放量低于 {min_play}" if kw_cold else ""
+            last_reason = f"「{keyword}」里没找到合适的新视频（可能都看过、时长不合适{reason_cold}）"
+            logger.info(f"[bili] {last_reason}（已试 3 组排序/翻页）")
 
         return None, last_reason or "试了几个词都没找到合适的新视频"
 
