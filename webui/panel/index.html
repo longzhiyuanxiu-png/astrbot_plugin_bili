@@ -61,6 +61,8 @@ a{color:var(--accent2);text-decoration:none}
 .pill i{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block}
 .pill.ok i{background:var(--ok);box-shadow:0 0 0 3px rgba(62,201,167,.16)}
 .pill.busy i{background:var(--accent);animation:pulse 1.1s infinite}
+.pill.run i{background:var(--ok);animation:pulse 1.1s infinite}
+.pill.ac i{background:var(--accent)}
 .pill.warn i{background:var(--warn)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .btn{appearance:none;border:1px solid var(--line2);background:var(--card);color:var(--text);
@@ -1242,9 +1244,10 @@ function renderLogin(){
   if (!el) return;
   var box = $("loginBox");
   var logging = (box && box.classList.contains("on"));
-  if (logging) { el.textContent = "登录中…"; return; }
-  if (LOGGED) { el.textContent = "小号已登录"; return; }
-  el.textContent = "未登录 · 点此扫码";
+  var pill = $("pillLogin");
+  if (logging) { el.textContent = "登录中…"; if (pill) pill.className = "pill run"; return; }
+  if (LOGGED) { el.textContent = "小号已登录"; if (pill) pill.className = "pill ok"; return; }
+  el.textContent = "未登录 · 点此扫码"; if (pill) pill.className = "pill warn";
 }
 function renderNext(){
   var el = $("pillNextTxt"), box = $("pillNext");
@@ -1262,6 +1265,7 @@ function renderNext(){
   var left = at - Date.now() / 1000;
   if (left <= 0) { el.textContent = "马上开始"; return; }
   var m = Math.floor(left / 60), sec = Math.floor(left % 60);
+  if (box) box.className = "pill ac";
   el.textContent = "下一轮 " + fmtClock(at) + "（" + (m > 0 ? (m + " 分 ") : "") + sec + " 秒）";
 }
 setInterval(function(){ renderLogin(); renderNext(); }, 1000);
