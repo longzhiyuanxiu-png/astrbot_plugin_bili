@@ -1589,10 +1589,11 @@ class BiliLearningPlugin(Star):
             umo = str(self.state.get("share_umo") or "").strip()
             if not umo:
                 return {"ok": False, "error": "还不知道往哪个会话发（先在 QQ 里发一次 /bili）", "data": {}}
-            await self._notify(umo, text)
             card = self._build_daily_card()
             if card:
                 await self._notify_image(umo, card)
+            else:
+                await self._notify(umo, text)
             self.state["daily_report_date"] = self._today()
             self._save_state()
             self._log("从后台页面发了一次日报")
@@ -3022,13 +3023,14 @@ class BiliLearningPlugin(Star):
 
     async def _send_daily(self, event: AstrMessageEvent, full: bool = False) -> None:
         """日报统一发法：先说一句话，再发图片；full=True 时额外把文字清单也发一份。"""
-        try:
-            await event.send(event.plain_result(self._build_daily_summary()))
-        except Exception as exc:
-            logger.warning(f"[bili] 发日报摘要失败: {exc!r}")
         card = self._build_daily_card()
         if card:
             await self._notify_image(event.unified_msg_origin, card)
+        else:
+            try:
+                await event.send(event.plain_result(self._build_daily_summary()))
+            except Exception as exc:
+                logger.warning(f"[bili] 发日报摘要失败: {exc!r}")
         if full:
             try:
                 await event.send(event.plain_result(self._build_daily_report(limit=999)))
@@ -3090,12 +3092,14 @@ class BiliLearningPlugin(Star):
                         text = self._build_daily_summary()
                         self.state["daily_report_date"] = self._today()
                         self._save_state()
-                        if text and umo:
-                            await self._notify(umo, text)
+                        if umo:
                             card = self._build_daily_card()
                             if card:
                                 await self._notify_image(umo, card)
-                            self._log("当日汇总已发送")
+                            elif text:
+                                await self._notify(umo, text)
+                            if card or text:
+                                self._log("当日汇总已发送")
             except Exception as exc:
                 logger.warning(f"[bili] 日报任务异常: {exc!r}")
             await asyncio.sleep(60)
