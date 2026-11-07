@@ -813,6 +813,17 @@ class BiliLearningPlugin(Star):
         trash = self.notes_dir / "notes" / "trash"
         trash.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        try:
+            _txt = src.read_text(encoding="utf-8", errors="replace")
+            _m = re.search(r"bilibili\.com/video/(BV[0-9A-Za-z]+)", _txt)
+            if _m:
+                _lst = self.state.setdefault("deleted_bvids", [])
+                if _m.group(1) not in _lst:
+                    _lst.append(_m.group(1))
+                    _lst[:] = _lst[-500:]
+                    self._save_state()
+        except Exception:
+            pass
         dst = trash / f"{stamp}_{safe}"
         try:
             _shutil.move(str(src), str(dst))
@@ -894,6 +905,17 @@ class BiliLearningPlugin(Star):
         trash = self.notes_dir / "notes" / "trash"
         trash.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        try:
+            _txt = src.read_text(encoding="utf-8", errors="replace")
+            _m = re.search(r"bilibili\.com/video/(BV[0-9A-Za-z]+)", _txt)
+            if _m:
+                _lst = self.state.setdefault("deleted_bvids", [])
+                if _m.group(1) not in _lst:
+                    _lst.append(_m.group(1))
+                    _lst[:] = _lst[-500:]
+                    self._save_state()
+        except Exception:
+            pass
         dst = trash / f"{stamp}_{safe}"
         try:
             _shutil.move(str(src), str(dst))
@@ -3035,7 +3057,11 @@ class BiliLearningPlugin(Star):
         d = self.notes_dir / "notes"
         if not d.exists():
             return []
-        files = list(d.rglob("*.md"))
+        # 排除回收站与归档目录：否则删掉的笔记还会出现在列表里
+        files = [
+            p for p in d.rglob("*.md")
+            if "trash" not in p.parts and "archive" not in p.parts
+        ]
         return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
 
     def _archive_notes(self, keep: int = 200) -> int:

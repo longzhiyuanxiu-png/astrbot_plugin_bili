@@ -362,6 +362,8 @@ class Learner:
                 pool = []
                 too_cold = 0
                 for it in items:
+                    if it.get("bvid") and it["bvid"] in (self.state.get("deleted_bvids") or []):
+                        continue  # 主人删过的视频，不再学
                     if not it.get("bvid") or it["bvid"] in seen or it["bvid"] in rejected:
                         continue
                     sec = parse_duration(it.get("duration"))
