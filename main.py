@@ -1227,9 +1227,14 @@ class BiliLearningPlugin(Star):
                 continue
             seen.add(title)
             nm = ""
-            mm = _re.search(r"([^\\/\s]+\.md)", body)
+            # 文件名里可能有空格（如「Eve的《Fight Song》MV…」），不能按空白截断
+            mm = _re.search(r"笔记\s+([^\r\n]+?\.md)\s*$", body)
             if mm:
-                nm = mm.group(1)
+                nm = Path(mm.group(1).strip()).name
+            else:
+                mm2 = _re.search(r"([^\\/\r\n]+\.md)\s*$", body)
+                if mm2:
+                    nm = Path(mm2.group(1).strip()).name
             tags = []
             if nm and title not in bored:
                 try:
