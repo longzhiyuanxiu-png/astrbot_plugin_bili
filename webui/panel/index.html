@@ -572,7 +572,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
       <div class="kpis">
         <div class="kpi"><div class="label">今天啃的视频</div><div class="value" id="kVideo">–</div><div class="sub" id="kVideoSub">个视频</div></div>
         <div class="kpi"><div class="label">今天写的笔记</div><div class="value" id="kNote">–</div><div class="sub" id="kNoteSub">篇</div></div>
-        <div class="kpi"><div class="label">今天吃掉的 token</div><div class="value" id="kToken">–</div><div class="sub">按天累计</div></div>
+        <div class="kpi"><div class="label">今天吃掉的 token</div><div class="value" id="kToken">–</div><div class="sub">按天累计 · 约 ¥<span id="kCost">–</span></div></div>
         <div class="kpi"><div class="label">发给你的私信</div><div class="value" id="kDm">–</div><div class="sub" id="kDmSub">今日已发</div></div>
       </div>
       <div class="say" id="say"></div>
@@ -792,6 +792,7 @@ function renderKpis(d){
   $("kVideo").textContent = d.videos_today;
   $("kNote").textContent = d.notes_today;
   $("kToken").textContent = nfmt(d.tokens_today);
+  if ($("kCost")) $("kCost").textContent = (Number(d.cost_today) || 0).toFixed(2);
   $("kDm").textContent = d.dm_today;
   $("kVideoSub").textContent = "个视频 · 已跑 " + d.runs_today + "/" + (d.runs_per_day || "–") + " 轮";
   $("kNoteSub").textContent = "篇 · 累计 " + (d.notes_total || 0) + " 篇";

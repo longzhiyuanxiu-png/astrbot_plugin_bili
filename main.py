@@ -509,6 +509,7 @@ class BiliLearningPlugin(Star):
                     ),
                     "videos_today": max(int(usage.get("videos", 0) or 0), len(self._today_notes())),
                     "tokens_today": int(usage.get("tokens", 0) or 0),
+            "cost_today": self._cost_estimate(int(usage.get("tokens", 0) or 0)),
                     "runs_today": int(plan.get("runs", 0) or 0),
                     "runs_per_day": int(self.config.get("runs_per_day", 0) or 0),
                     "last_round": self.state.get("last_round") or {},
