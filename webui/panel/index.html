@@ -589,7 +589,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
           <button class="btn ghost" id="btnTrash" type="button">🗑 回收站<span id="trashN" style="color:var(--muted);margin-left:6px"></span></button>
           <span style="color:var(--muted);font-size:13px">删掉的笔记先放这里，可恢复或彻底删除</span>
         </div>
-        <div id="trashList" style="display:none;margin-top:12px;max-height:46vh;overflow:auto"></div>
+        <div id="trashList" style="display:none;margin-top:8px;max-height:30vh;overflow:auto"></div>
                 <div class="notewrap">
           <div class="cal" id="cal"></div>
           <div class="notes" id="notes"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
@@ -732,18 +732,17 @@ async function loadTrash(force){
   var items = (r && r.data && r.data.items) || (r && r.items) || [];
   if (badge) badge.textContent = items.length ? "(" + items.length + ")" : "";
   if (!items.length){
-    box.innerHTML = '<div style="color:var(--muted);padding:16px">回收站是空的</div>';
+    box.innerHTML = '<div style="color:var(--muted);padding:8px;font-size:13px">回收站是空的</div>';
     return;
   }
   box.innerHTML = items.map(function(it){
     var nm = encodeURIComponent(it.name);
-    return '<div style="background:#fff;border:1px solid #e6ecf7;border-radius:14px;padding:14px 16px;margin-bottom:10px">'
-      + '<div style="font-weight:700;font-size:15px;color:#22315b">' + esc(it.title || it.name) + '</div>'
-      + '<div style="color:#8b9bc4;font-size:13px;margin-top:4px">' + fmtTime(it.mtime) + " · " + (it.size/1024).toFixed(1) + ' KB</div>'
-      + '<div style="margin-top:10px;display:flex;gap:8px">'
-      + '<button class="btn" type="button" data-restore="' + nm + '">恢复</button>'
-      + '<button class="btn ghost" type="button" data-purge="' + nm + '">彻底删除</button>'
-      + '</div></div>';
+    return '<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e6ecf7;border-radius:10px;padding:7px 12px;margin-bottom:6px">'
+      + '<span style="flex:1;min-width:0;font-weight:600;font-size:13.5px;color:#22315b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(it.title || it.name) + '</span>'
+      + '<span style="color:#9aa9cc;font-size:12px;white-space:nowrap">' + String(fmtTime(it.mtime)).slice(5) + " · " + (Number(it.size||0)/1024).toFixed(1) + 'KB</span>'
+      + '<button class="btn ghost" type="button" data-restore="' + nm + '" style="padding:3px 10px;font-size:12.5px">恢复</button>'
+      + '<button class="btn ghost" type="button" data-purge="' + nm + '" style="padding:3px 10px;font-size:12.5px;color:#e0567a">删除</button>'
+      + '</div>';
   }).join("");
   box.querySelectorAll("[data-restore]").forEach(function(b){
     b.onclick = function(){ trashAct("restore", decodeURIComponent(b.getAttribute("data-restore"))); };
