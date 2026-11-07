@@ -1430,27 +1430,22 @@ function _money(v){
   if (!isFinite(n)) return "--";
   return n.toFixed(2);
 }
-function bubModules(d){
-  return [{
-    label: "DeepSeek 余额",
-    amount: "\u00a5" + _money(d && d.balance),
-    hint: ""
-  }];
-}
+var BUBBLE_BY_PAGE = {
+  overview: ["今天也在认真刷视频", "想看啥就把 BV 号丢给我"],
+  notes:    ["笔记都收在这页了", "点开一条能看全文"],
+  interests:["我最近在意这些", "嫌我跑偏就改，改完立刻生效"],
+  switches: ["开关都在这一页", "标了「需重载」的要重载插件"]
+};
 function renderModule(){
-  var mods = bubModules(_bubData || {});
-  if (_moduleIdx >= mods.length) _moduleIdx = 0;
-  var m = mods[_moduleIdx];
-  var L = document.getElementById("bLabel"), A = document.getElementById("bAmount"), H = document.getElementById("bHint");
-  if (L) L.textContent = m.label;
-  if (A) A.textContent = m.amount;
-  if (H) H.textContent = m.hint || "";
-  var E = document.getElementById("bExtra");
-  if (E) {
-    var c = (_bubData && _bubData.cost_today);
-    E.textContent = (c === undefined || c === null) ? "" : ("\u4eca\u65e5\u5b66\u8d39 \u00a5" + _money(c));
-  }
+  var page = (typeof _curPage !== "undefined" && _curPage) ? _curPage : "overview";
+  var t = BUBBLE_BY_PAGE[page] || BUBBLE_BY_PAGE.overview;
+  var L = document.getElementById("bLabel"), A = document.getElementById("bAmount"), H = document.getElementById("bHint"), E = document.getElementById("bExtra");
+  if (L) L.textContent = t[0];
+  if (A) { A.textContent = ""; A.style.display = "none"; }
+  if (H) H.textContent = t[1];
+  if (E) { E.textContent = ""; E.style.display = "none"; }
 }
+
 function loadBubble(){
   try {
     call("GET", "balance").then(function(r){
@@ -1581,6 +1576,7 @@ function toggleBubble(){
   try{
     var q = new URLSearchParams(location.search);
     if (q.get("bubble") === "1") { _bubDebug = true; setTimeout(showBubble, 600); }
+
     if (q.get("round") === "1") setTimeout(function(){
       var rl2 = document.getElementById("bLabel"), ra2 = document.getElementById("bAmount"), rh2 = document.getElementById("bHint");
       if (rl2) rl2.textContent = "刚看完";
@@ -1615,6 +1611,7 @@ function showPage(name){
   if (t) t.textContent = PAGE_TITLES[name];
   try { localStorage.setItem("bili_page", name); } catch (e) {}
   try { if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name); } catch (e) {}
+  try { renderModule(); } catch (e) {}
 }
 function renderOverviewNotes(){
   var el = document.getElementById("ovNotes");
