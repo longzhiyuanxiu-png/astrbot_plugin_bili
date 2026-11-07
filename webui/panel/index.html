@@ -552,6 +552,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
         <div class="pills" id="pillsBox">
           <span class="pill" id="pillBot"><i></i>小号</span>
           <span class="pill" id="pillBusy"><i></i>空闲</span>
+          <span class="pill" id="pillLogin" title="B站小号登录状态" style="cursor:pointer"><i></i><span id="pillLoginTxt">登录状态</span></span>
           <span class="pill" id="pillNext" title="下一次自动学习"><i></i><span id="pillNextTxt">下一轮 --:--</span></span>
         </div>
         <span class="sep"></span>
@@ -1202,6 +1203,7 @@ async function loadHistory(){
   }catch(e){}
 }
 var NEXT_INFO = null;
+var LOGGED = false;
 function fmtClock(ts){
   var d = new Date(ts * 1000);
   return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
@@ -1232,19 +1234,25 @@ async function openLogin(){
   }, 2000);
 }
 document.addEventListener("click", function(e){
-  if (e.target.closest("#pillNext")) { openLogin(); return; }
+  if (e.target.closest("#pillLogin")) { openLogin(); return; }
   if (e.target.closest("#loginClose") || e.target.closest("#loginMask")) { loginClose(); }
 });
+function renderLogin(){
+  var el = $("pillLoginTxt");
+  if (!el) return;
+  var box = $("loginBox");
+  var logging = (box && box.classList.contains("on"));
+  if (logging) { el.textContent = "登录中…"; return; }
+  if (LOGGED) { el.textContent = "小号已登录"; return; }
+  el.textContent = "未登录 · 点此扫码";
+}
 function renderNext(){
   var el = $("pillNextTxt"), box = $("pillNext");
   if (!el) return;
   var n = NEXT_INFO, st = (n && n.state) || "";
-  var logging = ($("loginBox") && $("loginBox").classList.contains("on"));
-  if (st === "running" || (n && n.busy)) { if (box) box.style.display = "none"; return; }
+  if (st === "running" || st === "offline" || (n && n.busy)) { if (box) box.style.display = "none"; return; }
   if (box) box.style.display = "";
-  if (logging) { el.textContent = "登录中…"; return; }
   if (!n) { el.textContent = "下一轮 --:--"; return; }
-  if (st === "offline") { el.textContent = "未登录 · 点此扫码"; return; }
   if (st === "paused") { el.textContent = "已暂停"; return; }
   if (st === "off") { el.textContent = "自动学习关"; return; }
   if (st === "done") { el.textContent = "今天学完了"; return; }
@@ -1256,12 +1264,13 @@ function renderNext(){
   var m = Math.floor(left / 60), sec = Math.floor(left % 60);
   el.textContent = "下一轮 " + fmtClock(at) + "（" + (m > 0 ? (m + " 分 ") : "") + sec + " 秒）";
 }
-setInterval(renderNext, 1000);
+setInterval(function(){ renderLogin(); renderNext(); }, 1000);
 async function refresh(full){
   try{
     await loadSummary();
     NEXT_INFO = (last && last.schedule) || null;
-    renderNext();
+    LOGGED = !!(last && last.logged_in);
+    renderLogin(); renderNext();
     var total = (last && typeof last.notes_total === "number") ? last.notes_total : null;
     if (full || (total !== null && total !== _seenNotes)) {
       await loadNotes();
