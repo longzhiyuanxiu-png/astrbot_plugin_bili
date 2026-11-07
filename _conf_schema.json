@@ -34,12 +34,6 @@
         "default": true,
         "hint": "关掉之后她完全不学，也不会发任何汇报"
       },
-      "dry_run": {
-        "type": "bool",
-        "description": "试运行（只看不互动）",
-        "default": true,
-        "hint": "打开后只学、只写笔记，绝不点赞/投币/收藏/发私信；确认没问题再关掉"
-      },
       "admin_ids": {
         "type": "list",
         "description": "谁可以发 /bili 指令",

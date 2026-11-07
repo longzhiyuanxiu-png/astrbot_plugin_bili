@@ -48,7 +48,7 @@ INTEREST_PRESETS: Dict[str, List[str]] = {
 
 DESC = (
     "📺 让她用自己的B站小号自主学习：自己选题、看视频、写笔记、主动分享收获。"
-    "支持点赞/收藏（限额）、弹幕热评输入、知识入库、语音汇报。默认干跑模式，所有限制都能在后台配置页调整。"
+        "支持点赞/收藏（限额）、弹幕热评输入、知识入库、语音汇报。"
 )
 DEFAULT_ADMIN = ""  # 留空则只认配置里的 admin_ids 或 AstrBot 管理员
 DEFAULT_NOTES_DIR = str(Path(__file__).parent / "notes")
@@ -150,7 +150,6 @@ class BiliLearningPlugin(Star):
         logger.info(
             f"[bili] 初始化完成: notes={self.notes_dir} "
             f"登录={'是' if self.api.logged_in else '否'} "
-            f"干跑={bool(self.config.get('dry_run', True))}"
         )
         self._busy = False
         self._loop_task: Optional[asyncio.Task] = None
@@ -472,7 +471,6 @@ class BiliLearningPlugin(Star):
             "share_dm": bool(self.config.get("share_dm", True)),
             "share_qq": bool(self.config.get("share_qq", True)),
             "share_voice": bool(self.config.get("share_voice", True)),
-            "dry_run": bool(self.config.get("dry_run", True)),
             "transcribe_first": bool(self.config.get("transcribe_first", False)),
             "only_interest_videos": bool(
                 self.config.get("only_interest_videos", False)
@@ -531,7 +529,6 @@ class BiliLearningPlugin(Star):
                         "voice": bool(self.config.get("share_voice", True)),
                     },
                     "flags": {
-                        "dry_run": bool(self.config.get("dry_run", False)),
                         "transcribe_first": bool(
                             self.config.get("transcribe_first", False)
                         ),
@@ -1581,7 +1578,6 @@ class BiliLearningPlugin(Star):
             "share_dm",
             "share_qq",
             "share_voice",
-            "dry_run",
             "transcribe_first",
             "only_interest_videos",
         }
@@ -2215,7 +2211,6 @@ class BiliLearningPlugin(Star):
         budget = int(self.config.get("daily_token_budget", 150000) or 0)
         budget_text = f"/{budget}" if budget else "（不限）"
         lines.append(f"今天：{usage.get('videos', 0)} 个视频 · {usage.get('tokens', 0)} tokens{budget_text}")
-        lines.append(f"干跑模式：{'开（不会真的点赞）' if self.config.get('dry_run', True) else '关（会真的点赞/收藏）'}")
         lines.append(
             "只看兴趣视频："
             + (
@@ -3700,61 +3695,7 @@ class BiliLearningPlugin(Star):
     async def _do_actions(
         self, result: Dict[str, Any], worth: Optional[bool] = None
     ) -> List[str]:
-        """看完之后点赞/投币/收藏（干跑模式什么都不做）。"""
-        if self.config.get("dry_run", True):
-            return []
-        info = (result.get("pack") or {}).get("info") or {}
-        aid = info.get("aid")
-        if not aid:
-            return []
-        note = result.get("note") or {}
-        if worth is None:
-            worth = self._worth_actions(info, note)
-        if not worth:
-            self._log(f"《{info.get('title')}》跟兴趣不搭，只看不互动")
-            return []
-        acts = self.state.setdefault("actions", {}).setdefault(
-            self._today(), {"like": 0, "fav": 0, "coin": 0}
-        )
-        gap = int(self.config.get("action_min_interval_sec", 20) or 0)
-        last = float(self.state.get("last_action_ts", 0) or 0)
-        if gap and last and time.time() - last < gap:
-            await asyncio.sleep(max(0.0, gap - (time.time() - last)))
-        done: List[str] = []
-        try:
-            if self.config.get("allow_like", False) and acts["like"] < int(
-                self.config.get("like_daily_limit", 10) or 0
-            ):
-                r = await self.api.like(int(aid), True)
-                if r.get("code") in (0, 65006):  # 65006 = 重复点赞
-                    acts["like"] += 1
-                    done.append("点赞")
-                else:
-                    logger.info(f"[bili] 点赞失败: {r}")
-            if self.config.get("allow_coin", False) and acts["coin"] < int(
-                self.config.get("coin_daily_limit", 2) or 0
-            ):
-                r = await self.api.coin(int(aid), 1, also_like=False)
-                if r.get("code") == 0:
-                    acts["coin"] += 1
-                    done.append("投币")
-            if self.config.get("allow_fav", False) and acts["fav"] < int(
-                self.config.get("fav_daily_limit", 10) or 0
-            ):
-                fid = await self._pick_fav_folder()
-                if fid:
-                    r = await self.api.fav(int(aid), fid, True)
-                    if r.get("code") == 0:
-                        acts["fav"] += 1
-                        done.append("收藏")
-        except Exception as exc:
-            logger.warning(f"[bili] 点赞收藏失败: {exc!r}")
-        finally:
-            self.state["last_action_ts"] = time.time()
-            self._save_state()
-        if done:
-            self._log(f"对《{info.get('title')}》做了：{'、'.join(done)}")
-        return done
+        """看完之后点赞/投币/收藏。"""
     async def _voice_report(self, text: str, umo: str) -> bool:
         """把汇报念成语音发出去。"""
         if not self.config.get("share_voice", True):
@@ -4401,70 +4342,6 @@ class BiliLearningPlugin(Star):
         if provider is None:
             self._log("定时学习跳过：没有可用模型")
             return
-        if self.config.get("dry_run", True):
-            self._log("干跑模式：本轮只记录，不点赞不收藏")
-        learner = Learner(self.api, dict(self.config), self.state)
-        result = await learner.run_once(provider, share_umo or "scheduler", self.notes_dir / "notes")
-        self._save_state()
-        if not result.get("ok"):
-            self._log(f"定时学习失败：{result.get('error')}")
-            await self._notify_issue("learn", f"这轮学习没成：{result.get('error')}")
-            return
-        usage = self._usage_today()
-        usage["videos"] = int(usage.get("videos", 0)) + 1
-        if result.get("path"):
-            usage["notes"] = int(usage.get("notes", 0)) + 1
-        raw_usage = result.get("usage") or {}
-        if isinstance(raw_usage, dict):
-            usage["tokens"] = int(usage.get("tokens", 0)) + int(
-                (raw_usage.get("total_tokens") or 0)
-                or ((raw_usage.get("prompt_tokens") or 0) + (raw_usage.get("completion_tokens") or 0))
-            )
-        self.state["last_round"] = {
-            "title": str(result.get("title") or "")[:80],
-            "tokens": int(
-                (raw_usage.get("total_tokens") or 0)
-                or ((raw_usage.get("prompt_tokens") or 0) + (raw_usage.get("completion_tokens") or 0))
-            ) if isinstance(raw_usage, dict) else 0,
-            "ts": int(time.time()),
-        }
-        try:
-            self.state["last_round"]["cost"] = round(
-                self._cost_estimate(int(self.state["last_round"]["tokens"])), 4)
-        except Exception:
-            self.state["last_round"]["cost"] = 0.0
-        self._save_state()
-        self._log(f"自主学习看完《{result.get('title')}》，笔记 {result.get('path')}")
-        await self._push_memory(result, share_umo or "scheduler")
-        note = result.get("note") or {}
-        self._drift_interests(note)
-        self._archive_notes()
-        self._rebuild_index()
-        worth = self._worth_actions(
-            (result.get("pack") or {}).get("info") or {}, result.get("note") or {}
-        )
-        acts = await self._do_actions(result, worth)
-        dm_line = await self._share_video_dm(result, worth)
-        if not share_umo:
-            self._log("还没有可以汇报的会话（先私聊我说句话）")
-            return
-        text = note.get("share_text") or note.get("summary") or ""
-        msg = f"我刚才自己看了个视频：《{result.get('title')}》\n\n{text}"
-        if acts:
-            msg += f"\n\n（顺手{'、'.join(acts)}了）"
-        if dm_line:
-            msg += f"\n（{dm_line}）"
-        if self.config.get("ask_in_report", True):
-            msg += "\n\n要我给你细讲哪一点？"
-        mode = str(self.config.get("report_mode", "daily") or "daily").lower()
-        if not self.config.get("share_qq", True):
-            self._log("QQ汇报开关是关的，这轮不推文字")
-        elif mode == "instant":
-            await self._notify(share_umo, msg)
-        else:
-            self._log("日报模式：这轮不单独推，攒到晚上一起说")
-        if mode == "instant":
-            await self._voice_report(text, share_umo)
     async def terminate(self) -> None:
         """插件卸载/重载时停掉所有后台协程，避免旧实例的循环还在跑。"""
         for name in ("_report_task", "_whisper_task", "_notes_task", "_loop_task", "_panel_web_task"):
