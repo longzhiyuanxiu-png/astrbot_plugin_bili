@@ -57,6 +57,12 @@
         "description": "独立面板端口",
         "default": 4123,
         "hint": "浏览器访问 http://127.0.0.1:端口；端口冲突就换一个"
+      },
+      "master_title": {
+        "description": "她怎么称呼你",
+        "type": "string",
+        "default": "主人",
+        "hint": "写笔记、发私信、权限提示里都用这个称呼。可填「主人」「老板」「你」或你的名字"
       }
     }
   },

@@ -1,4 +1,4 @@
-﻿"""选题 → 取内容 → 让模型看 → 写笔记 的完整流水线（第二阶段）。"""
+"""选题 → 取内容 → 让模型看 → 写笔记 的完整流水线（第二阶段）。"""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - 兼容非包方式加载
 
 SYSTEM_PROMPT_TMPL = (
     "你是「{name}」，一个好奇心很强、说话软乎乎的女孩子。"
-    "你现在在B站看视频学习，看完要给主人写一份自己的笔记。"
+    "你现在在B站看视频学习，看完要给{master}写一份自己的笔记。"
     "要求：口语化、有自己的感受和吐槽、不要写成百科词条；"
     "只根据给定内容写，不要编造视频里没有的信息；"
     "笔记里出现的「我」就是你（{name}），不是 UP 主、也不是读者；"
@@ -34,8 +34,8 @@ SYSTEM_PROMPT_TMPL = (
 )
 
 
-def build_system_prompt(name: str = "小助手") -> str:
-    return SYSTEM_PROMPT_TMPL.format(name=name)
+def build_system_prompt(name: str = "小助手", master: str = "主人") -> str:
+    return SYSTEM_PROMPT_TMPL.format(name=name, master=master)
 
 
 SYSTEM_PROMPT = build_system_prompt()
@@ -63,22 +63,22 @@ UP主：{owner}
 
 请严格输出如下 JSON（所有字段都用中文）：
 {{
-  "relevant": "true 或 false —— 值不值得我和主人看。动漫、音乐、番剧、游戏、网络梗、搞笑、生活趣味、宠物、整活，都算相关；只有纯广告带货、纯教程口播、无信息量的搬运或新闻通稿，才算 false",
+  "relevant": "true 或 false —— 值不值得我和{master}看。动漫、音乐、番剧、游戏、网络梗、搞笑、生活趣味、宠物、整活，都算相关；只有纯广告带货、纯教程口播、无信息量的搬运或新闻通稿，才算 false",
   "title": "给这期笔记起个标题，20字以内",
   "gist": "60~90 字，一句话说清「这是个什么视频」：多长、什么形式、谁在做什么、关键梗或冲突在哪。要像跟人转述那样说人话，别用「本期视频」「up主通过」这种书面腔",
   "summary": "350~500 字，客观讲清楚视频内容：开头怎么起、中间讲了哪几件事、结尾落在哪，关键细节别漏。只写视频里真实出现的，不评价、不抒情",
   "points": ["3~5 条知识点，每条一句话"],
-  "insights": "150~250 字，用「我」的第一人称写。这个「我」就是{name}，一条被主人养着的鱼：看到这条视频，我会怎么想、有什么小情绪、跟我的经历有什么可对照的。写成一整段，别分点、别复述内容",
+  "insights": "150~250 字，用「我」的第一人称写。这个「我」就是{name}，一条被{master}养着的鱼：看到这条视频，我会怎么想、有什么小情绪、跟我的经历有什么可对照的。写成一整段，别分点、别复述内容",
   "tags": ["3~6 个主题标签，方便以后检索"],
-  "share_text": "准备讲给主人听的口播版，100~180 字，第一人称",
-  "dm_text": "发给主人的B站私信里那句话，40~60 字，必须是一句完整的话（有主语有结尾，别用省略号吊着），像发微信跟人分享：说出你最想说的那个点，可以是吐槽也可以是心动。不要复述视频讲了什么，也不要带链接"
+  "share_text": "准备讲给{master}听的口播版，100~180 字，第一人称",
+  "dm_text": "发给{master}的B站私信里那句话，40~60 字，必须是一句完整的话（有主语有结尾，别用省略号吊着），像发微信跟人分享：说出你最想说的那个点，可以是吐槽也可以是心动。不要复述视频讲了什么，也不要带链接"
 }}
 
 写法要求：
 - gist 示例：『31 秒的短视频。外卖送到放门口，UP 主拍照时发现旁边蹲着一只怕生的猫，弹幕和评论区全在起哄让他喂猫、别打它。』
 - summary 是「讲给别人听」，客观、具体、有时间线，别用第一人称。
 - insights 是「我自己的感受」，第一人称，可以带情绪和小吐槽，但不要编视频里没有的事，也不要重复 summary。
-- share_text 是当面跟主人讲的口气，比 insights 更活泼一点。
+- share_text 是当面跟{master}讲的口气，比 insights 更活泼一点。
 - dm_text 是发到私信里的那一句，必须自成一句、说完就结束，40~60 字；不要「…」「等等」这种没说完的感觉。
 
 如果 relevant 填 false（确实没意思）：summary 只写一句话（30 字以内，说明这是什么内容），
@@ -167,6 +167,7 @@ class Learner:
         self.config = config
         self.state = state
         self.persona = str(config.get("bot_name") or "小助手").strip() or "小助手"
+        self.master = str(config.get("master_title") or "主人").strip() or "主人"
 
     # ---------------------------------------------------------------- 选题
     @staticmethod
@@ -854,6 +855,7 @@ class Learner:
         return (
             NOTE_PROMPT.format(
                 name=self.persona,
+                master=self.master,
                 title=info.get("title") or "",
                 owner=info.get("owner") or "",
                 duration=info.get("duration") or 0,
@@ -1008,7 +1010,7 @@ class Learner:
             try:
                 resp = await provider.text_chat(
                     prompt=prompt,
-                    system_prompt=build_system_prompt(self.persona),
+                    system_prompt=build_system_prompt(self.persona, self.master),
                     session_id=umo,
                     persist=False,
                 )

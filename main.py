@@ -746,6 +746,13 @@ class BiliLearningPlugin(Star):
             pass
         return meta
 
+    def _master_title(self) -> str:
+        try:
+            v = str(self.config.get("master_title") or "").strip()
+        except Exception:
+            v = ""
+        return v or "主人"
+
     async def _panel_notes(self, **kwargs) -> dict:
         try:
             files = [
@@ -1789,7 +1796,7 @@ class BiliLearningPlugin(Star):
             return
         # 以下命令只允许管理员
         if not self._is_admin(event):
-            yield event.plain_result("这个只有主人能操作哦～")
+            yield event.plain_result(f"这个只有{self._master_title()}能操作哦～")
             return
         if sub in ("暂停", "pause"):
             self.state["paused"] = True
@@ -1808,19 +1815,19 @@ class BiliLearningPlugin(Star):
             return
         if sub in ("权重", "weight"):
             if not self._is_admin(event):
-                yield event.plain_result("改权重只有主人能改。")
+                yield event.plain_result(f"改权重只有{self._master_title()}能改。")
                 return
             yield event.plain_result(self._cmd_weight(arg))
             return
         if sub in ("只看兴趣", "兴趣视频", "onlyinterest"):
             if not self._is_admin(event):
-                yield event.plain_result("这个开关只有主人能改。")
+                yield event.plain_result(f"这个开关只有{self._master_title()}能改。")
                 return
             yield event.plain_result(self._cmd_toggle_interest(arg))
             return
         if sub in ("分享", "share"):
             if not self._is_admin(event):
-                yield event.plain_result("这个开关只有主人能改。")
+                yield event.plain_result(f"这个开关只有{self._master_title()}能改。")
                 return
             yield event.plain_result(self._cmd_toggle_share(arg))
             return
@@ -1961,7 +1968,7 @@ class BiliLearningPlugin(Star):
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[MessageEventResult, None]:
         if not self._is_admin(event):
-            yield event.plain_result("这个只有主人能操作哦～")
+            yield event.plain_result(f"这个只有{self._master_title()}能操作哦～")
             return
         self.api.clear()
         self._log("已清除本地登录态")

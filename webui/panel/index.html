@@ -1129,7 +1129,13 @@ async function deleteNote(){
   if (r && r.ok) {
     var n = (r.data && r.data.memory_removed) || 0;
     toast(withMem ? ("已删除，记忆清了 " + n + " 条") : "已移到回收站");
-    closeDrawer(); refresh(false);
+    var gone = _curNote;
+    closeDrawer();
+    notes = (notes || []).filter(function (x) { return x.name !== gone; });
+    _curNote = "";
+    try { renderCal(); renderNotes(); } catch (e) {}
+    _seenNotes = -1;
+    await refresh(true);
   }
   else { toast((r && r.error) || "删除失败"); }
 }
