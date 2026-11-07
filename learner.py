@@ -18,6 +18,7 @@ from astrbot.api import logger
 
 # 转写模型全局共享缓存：空闲一段时间后可以整块释放，省内存
 _WHISPER_CACHE: Dict[str, Any] = {"model": None, "key": None, "last_used": 0.0, "busy": 0}
+_DLL_HANDLES = []
 
 try:
     from .bili_api import BiliAPI
@@ -719,7 +720,8 @@ class Learner:
             threads = 0
         if threads <= 0:
             threads = min(16, max(2, (os.cpu_count() or 8) // 2))
-        key = (name, cache_dir, threads)
+        dev_cfg = str(self.config.get("whisper_device") or "auto").strip().lower()
+        key = (name, cache_dir, threads, dev_cfg)
         model = _WHISPER_CACHE.get("model")
         if model is not None and _WHISPER_CACHE.get("key") == key:
             _WHISPER_CACHE["last_used"] = time.time()
@@ -733,16 +735,53 @@ class Learner:
             logger.warning(f"[bili] 没装 faster-whisper：{exc!r}")
             return None
         t0 = time.time()
+        # GPU 推理需要的 CUDA 运行库（pip 装的 nvidia-cublas-cu12 / nvidia-cudnn-cu12）
+        # 注意：os.add_dll_directory 的返回值必须被持有，否则句柄释放后目录就失效了
+        global _DLL_HANDLES
         try:
-            model = WhisperModel(
-                name, device="cpu", compute_type="int8", download_root=cache_dir,
-                cpu_threads=threads, num_workers=1,
-            )
+            import site as _site
+            _dirs = []
+            for _sp in list(_site.getsitepackages()) + [_site.getusersitepackages()]:
+                for _sub in ("cublas/bin", "cudnn/bin"):
+                    _p = os.path.join(_sp, "nvidia", *_sub.split("/"))
+                    if os.path.isdir(_p) and _p not in _dirs:
+                        _dirs.append(_p)
+            if _dirs:
+                os.environ["PATH"] = os.pathsep.join(_dirs) + os.pathsep + os.environ.get("PATH", "")
+                for _p in _dirs:
+                    try:
+                        _DLL_HANDLES.append(os.add_dll_directory(_p))
+                    except Exception:
+                        pass
+                logger.info(f"[bili] 已挂载 CUDA 运行库目录: {_dirs}")
         except Exception as exc:
-            logger.warning(f"[bili] 加载 whisper 模型失败: {exc!r}")
+            logger.warning(f"[bili] 挂载 CUDA 运行库失败（可忽略，会退回 CPU）: {exc!r}")
+
+        # 优先用 cache_dir 下的本地快照目录（避免每次走 HuggingFace 联网解析）
+        _local = Path(cache_dir) / f"faster-whisper-{name}"
+        _target = str(_local) if (_local / "model.bin").exists() else name
+        cands = []
+        if dev_cfg in ("auto", "cuda", "gpu"):
+            cands += [("cuda", "float16"), ("cuda", "int8_float16")]
+        cands.append(("cpu", "int8"))
+        model = None
+        last_err = None
+        for _dev, _ct in cands:
+            try:
+                model = WhisperModel(
+                    _target, device=_dev, compute_type=_ct, download_root=cache_dir,
+                    cpu_threads=threads, num_workers=1,
+                )
+                logger.info(f"[bili] 转写模型已加载（{name} / {_dev}/{_ct}，{time.time() - t0:.1f} 秒，{_target}）")
+                _WHISPER_CACHE["device"] = _dev
+                break
+            except Exception as exc:
+                last_err = exc
+                logger.warning(f"[bili] {_dev}/{_ct} 加载失败，换下一个：{exc!r}")
+        if model is None:
+            logger.warning(f"[bili] 加载 whisper 模型失败: {last_err!r}")
             return None
         _WHISPER_CACHE.update({"model": model, "key": key, "last_used": time.time()})
-        logger.info(f"[bili] 转写模型已加载（{time.time() - t0:.1f} 秒，线程 {threads}）")
         return model
 
     @staticmethod

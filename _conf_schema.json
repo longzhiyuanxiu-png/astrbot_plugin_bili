@@ -94,6 +94,17 @@
         "default": "small",
         "hint": "填模型名（tiny/base/small/medium/large-v3）或本地权重目录的完整路径。medium 中文效果好但要下载 1.4 GB，small 更快但专名容易错。"
       },
+      "whisper_device": {
+        "type": "string",
+        "description": "转写设备",
+        "hint": "auto = 有 NVIDIA 显卡就用 GPU（比 CPU 快十倍以上），没有就退回 CPU；cuda 强制 GPU；cpu 强制 CPU",
+        "default": "auto",
+        "options": [
+          "auto",
+          "cuda",
+          "cpu"
+        ]
+      },
       "whisper_cache_dir": {
         "type": "string",
         "description": "模型和临时文件放哪",
