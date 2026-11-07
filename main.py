@@ -814,6 +814,21 @@ class BiliLearningPlugin(Star):
             logger.warning(f"[bili] 页面读取笔记失败: {exc!r}")
             return {"ok": False, "error": str(exc), "data": {"items": []}}
 
+    def _note_by_name(self, name: str) -> Path | None:
+        """按文件名找笔记：先根目录，再年份子目录（排除 trash/archive）。"""
+        safe = Path(str(name or "")).name
+        if not safe.endswith(".md") or safe == "index.md":
+            return None
+        root = self.notes_dir / "notes"
+        cand = root / safe
+        if cand.exists():
+            return cand
+        for p in root.rglob(safe):
+            if "trash" in p.parts or "archive" in p.parts:
+                continue
+            return p
+        return None
+
     async def _panel_note(self, **kwargs) -> dict:
         try:
             name = str(kwargs.get("name") or "")
@@ -822,8 +837,8 @@ class BiliLearningPlugin(Star):
             safe = Path(name).name
             if not safe.endswith(".md") or safe != name:
                 return {"ok": False, "error": "文件名不合法", "data": {}}
-            path = self.notes_dir / "notes" / safe
-            if not path.exists():
+            path = self._note_by_name(safe)
+            if path is None:
                 return {"ok": False, "error": "找不到这篇笔记", "data": {}}
             return {
                 "ok": True,
@@ -915,8 +930,8 @@ class BiliLearningPlugin(Star):
         safe = Path(name).name
         if not safe.endswith(".md") or safe != name or safe == "index.md":
             return {"ok": False, "error": "文件名不合法", "data": {}}
-        src = self.notes_dir / "notes" / safe
-        if not src.exists():
+        src = self._note_by_name(safe)
+        if src is None:
             return {"ok": False, "error": "找不到这篇笔记", "data": {}}
         trash = self.notes_dir / "notes" / "trash"
         trash.mkdir(parents=True, exist_ok=True)
@@ -1007,8 +1022,8 @@ class BiliLearningPlugin(Star):
         safe = Path(name).name
         if not safe.endswith(".md") or safe != name or safe == "index.md":
             return {"ok": False, "error": "文件名不合法", "data": {}}
-        src = self.notes_dir / "notes" / safe
-        if not src.exists():
+        src = self._note_by_name(safe)
+        if src is None:
             return {"ok": False, "error": "找不到这篇笔记", "data": {}}
         trash = self.notes_dir / "notes" / "trash"
         trash.mkdir(parents=True, exist_ok=True)
@@ -1365,12 +1380,13 @@ class BiliLearningPlugin(Star):
                 mm2 = _re.search(r"([^\\/\r\n]+\.md)\s*$", body)
                 if mm2:
                     nm = Path(mm2.group(1).strip()).name
-            if nm and not (Path(nd) / "notes" / nm).exists():
+            _np = self._note_by_name(nm) if nm else None
+            if nm and _np is None:
                 continue  # 笔记已删/已归档，概览不再列
             tags = []
             if nm and title not in bored:
                 try:
-                    txt = (Path(nd) / "notes" / nm).read_text(encoding="utf-8", errors="replace")
+                    txt = _np.read_text(encoding="utf-8", errors="replace")
                     mt = _re.search(r"^-\s*标签[：:]\s*(.+)$", txt, _re.M)
                     if mt:
                         raw = mt.group(1).strip()
