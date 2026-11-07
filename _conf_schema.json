@@ -119,6 +119,12 @@
         "default": 30,
         "hint": "太长的不看（直播回放、超长合集）；转写很慢，别设太高"
       },
+      "min_play": {
+        "type": "int",
+        "description": "视频最低播放量",
+        "default": 1000,
+        "hint": "低于这个播放量的不学（0 = 不限）。冷门兴趣别设太高，否则搜不到合适视频；建议 1000–20000"
+      },
       "daily_token_budget": {
         "type": "int",
         "description": "每天 token 上限",

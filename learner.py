@@ -310,6 +310,7 @@ class Learner:
         min_sec = int(self.config.get("min_video_minutes", 3) or 0) * 60
         max_sec = int(self.config.get("max_video_minutes", 25) or 0) * 60
         dur_code = self._duration_code(min_sec, max_sec)
+        min_play = int(self.config.get("min_play", 0) or 0)
 
         # 追更优先：上一轮记下的下一集
         if self.config.get("follow_series", True):
@@ -357,6 +358,7 @@ class Learner:
                 continue
 
             pool = []
+            too_cold = 0
             for it in items:
                 if not it.get("bvid") or it["bvid"] in seen or it["bvid"] in rejected:
                     continue
@@ -368,11 +370,15 @@ class Learner:
                 if self._blocked_up(it.get("author") or "", it.get("mid")):
                     logger.info(f"[bili] 跳过不看的 UP 主：{it.get('author')}")
                     continue
+                if min_play and int(it.get("play") or 0) < min_play:
+                    too_cold += 1
+                    continue
                 pool.append(it)
 
             if not pool:
                 self._mark_keyword(keyword, False)
-                last_reason = f"「{keyword}」里没找到合适的新视频（可能都看过或时长不合适）"
+                reason_cold = f"，{too_cold} 条播放量低于 {min_play}" if too_cold else ""
+                last_reason = f"「{keyword}」里没找到合适的新视频（可能都看过、时长不合适{reason_cold}）"
                 logger.info(
                     f"[bili] {last_reason}（{order} 第 {page} 页 {len(items)} 条）"
                 )
