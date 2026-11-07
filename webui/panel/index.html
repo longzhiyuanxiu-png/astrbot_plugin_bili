@@ -1619,31 +1619,6 @@ function setCtrlHtml(it){
   return html;
 }
 
-/* 设置项：一聚焦就滚到屏幕中间，省得往下翻 */
-document.addEventListener("focusin", function (e) {
-  var el = e.target;
-  if (!el || !el.closest) return;
-  var row = el.closest("#setList .set-row");
-  if (!row) return;
-  var box = row.getBoundingClientRect();
-  if (box.height > window.innerHeight * 0.75) return;
-  var mid = box.top + box.height / 2;
-  if (Math.abs(mid - window.innerHeight / 2) < 80) return;
-  row.scrollIntoView({ block: "center", behavior: "smooth" });
-});
-document.addEventListener("click", function (e) {
-  var el = e.target;
-  if (!el || !el.closest) return;
-  var row = el.closest("#setList .set-row");
-  if (!row) return;
-  if (el.closest("input,select,textarea,button,a")) return;
-  var first = row.querySelector("input,select,textarea");
-  if (first) {
-    first.focus({ preventScroll: true });
-    row.scrollIntoView({ block: "center", behavior: "smooth" });
-  }
-});
-
 function renderSettings(){
   if (!SET || !document.getElementById("setList")) return;
   var q = (setQ || "").toLowerCase();
@@ -1669,6 +1644,18 @@ function renderSettings(){
     html += '<div class="set-group' + cg + '" data-g="' + esc(g.key) + '"><div class="sg-title">' + esc(g.title) + '<span class="sg-key">' + esc(g.key) + '</span></div>' + items.map(row).join("") + '</div>';
   });
   document.getElementById("setList").innerHTML = html || '<div class="empty">没找到匹配的设置</div>';
+  var em = /[?&]expand=([^&]+)/.exec(location.search);
+  if (em && !window.__expanded){
+    var eg = document.querySelector('.set-group[data-g="' + em[1] + '"]');
+    if (eg){
+      var eh = eg.querySelector(".sg-title");
+      if (eh){
+        window.__expanded = 1;
+        if (!eg.classList.contains("collapsed")) eh.click();   // 先收起（不滚动）
+        setTimeout(function(){ eh.click(); }, 60);             // 再展开（触发滚动置顶）
+      }
+    }
+  }
 }
 async function loadSettings(force){
   if (SET && !force){ renderSettings(); return; }
@@ -1716,6 +1703,13 @@ function bindSettings(){
       grp.classList.toggle("collapsed", nowCollapsed);
       setCollapsed[gk] = nowCollapsed;
       saveSetCollapsed();
+      if (!nowCollapsed){
+        var list = document.getElementById("setList");
+        if (list){
+          var top = grp.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop - 4;
+          list.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+        }
+      }
       return;
     }
     var t = e.target;
