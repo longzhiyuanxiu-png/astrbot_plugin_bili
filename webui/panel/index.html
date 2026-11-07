@@ -526,6 +526,7 @@ textarea.inp{resize:vertical;min-height:38px;line-height:1.5}
         <div class="pills" id="pillsBox">
           <span class="pill" id="pillBot"><i></i>小号</span>
           <span class="pill" id="pillBusy"><i></i>空闲</span>
+          <span class="pill" id="pillNext" title="下一次自动学习"><i></i><span id="pillNextTxt">下一轮 --:--</span></span>
         </div>
         <span class="sep"></span>
         <button class="btn primary" id="btnRun"><span class="spin"></span>喂她一个视频</button>
@@ -1174,9 +1175,35 @@ async function loadHistory(){
     renderChart((r && r.data) || { days: [] });
   }catch(e){}
 }
+var NEXT_INFO = null;
+function fmtClock(ts){
+  var d = new Date(ts * 1000);
+  return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+}
+function renderNext(){
+  var el = $("pillNextTxt");
+  if (!el) return;
+  var n = NEXT_INFO, st = (n && n.state) || "";
+  if (!n) { el.textContent = "下一轮 --:--"; return; }
+  if (st === "offline") { el.textContent = "小号未登录"; return; }
+  if (st === "paused") { el.textContent = "已暂停"; return; }
+  if (st === "off") { el.textContent = "自动学习关"; return; }
+  if (st === "done") { el.textContent = "今天学完了"; return; }
+  if (st === "quiet") { el.textContent = "免打扰中"; return; }
+  if (st === "running") { el.textContent = "正在学…"; return; }
+  var at = +n.at || 0;
+  if (!at) { el.textContent = "下一轮 --:--"; return; }
+  var left = at - Date.now() / 1000;
+  if (left <= 0) { el.textContent = "马上开始"; return; }
+  var m = Math.floor(left / 60), sec = Math.floor(left % 60);
+  el.textContent = "下一轮 " + fmtClock(at) + "（" + (m > 0 ? (m + " 分 ") : "") + sec + " 秒）";
+}
+setInterval(renderNext, 1000);
 async function refresh(full){
   try{
     await loadSummary();
+    NEXT_INFO = (last && last.schedule) || null;
+    renderNext();
     var total = (last && typeof last.notes_total === "number") ? last.notes_total : null;
     if (full || (total !== null && total !== _seenNotes)) {
       await loadNotes();

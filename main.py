@@ -332,6 +332,74 @@ class BiliLearningPlugin(Star):
         except Exception:
             return ""
 
+    def _panel_schedule_info(self) -> Dict[str, Any]:
+        """给面板顶部倒计时用：下一次自动学习时间 + 当前调度状态（与 _tick 口径一致）。"""
+        info: Dict[str, Any] = {"state": "waiting", "at": 0, "hint": ""}
+        try:
+            if not self.config.get("enabled", True):
+                info["state"] = "off"
+                return info
+            if self.state.get("paused"):
+                info["state"] = "paused"
+                return info
+            if self._busy:
+                info["state"] = "running"
+            if not self.api.logged_in:
+                info["state"] = "offline"
+                return info
+            now = datetime.now()
+            if self._in_quiet_hours(now):
+                info["state"] = "quiet"
+                return info
+            windows = self._windows()
+            if not windows:
+                info["state"] = "off"
+                return info
+            day_key = now.strftime("%Y-%m-%d")
+            day = (self.state.get("plan") or {}).get(day_key) or {}
+            runs_per_day = int(self.config.get("runs_per_day", 2) or 2)
+            if int(day.get("runs", 0) or 0) >= runs_per_day:
+                info["state"] = "done"
+                return info
+            min_gap = int(self.config.get("min_gap_minutes", 45) or 0)
+            last_ts = float(self.state.get("last_run_ts", 0) or 0)
+            gap_at = (last_ts + min_gap * 60 + 30) if (min_gap and last_ts) else 0.0
+            now_ts = time.time()
+            cands = []
+            for idx, (s_, e_) in enumerate(windows):
+                key = f"w{idx}"
+                if day.get(key + "_done"):
+                    continue
+                end_ts = e_.timestamp()
+                due = day.get(key)
+                if due is None:
+                    if s_ <= now < e_:
+                        cand = max(now_ts, gap_at)
+                    elif now < s_:
+                        cand = max(s_.timestamp(), gap_at)
+                    else:
+                        continue
+                else:
+                    due = float(due)
+                    cand = max(due, gap_at) if gap_at else due
+                    if cand <= now_ts:
+                        continue
+                if cand >= end_ts:
+                    continue
+                cands.append(cand)
+            if not cands:
+                if info["state"] != "running":
+                    info["state"] = "done"
+                return info
+            at = min(cands)
+            info["at"] = at if at > now_ts else now_ts
+            if info["state"] != "running":
+                info["state"] = "waiting"
+            return info
+        except Exception as exc:
+            logger.warning(f"[bili] 计算下一轮时间失败: {exc!r}")
+            return info
+
     def _panel_switches(self) -> Dict[str, Any]:
         """后台页面所有开关的统一快照（唯一事实来源）。"""
         return {
@@ -389,6 +457,7 @@ class BiliLearningPlugin(Star):
                         else ""
                     ),
                     "next_run": self._panel_next_run(),
+                    "schedule": self._panel_schedule_info(),
                     "share": {
                         "dm": bool(self.config.get("share_dm", True)),
                         "qq": bool(self.config.get("share_qq", True)),

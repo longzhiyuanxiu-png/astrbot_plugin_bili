@@ -81,9 +81,27 @@ class BiliAPI:
         return bool(self.cookies.get("SESSDATA"))
 
     def save(self) -> None:
+        """落盘 cookie。注意：绝不能用内存里的残缺 cookie 覆盖掉磁盘上已有的登录态
+        （曾经因为 ensure_buvid 在未 load 的实例上保存，把 SESSDATA 冲掉过）。"""
         self.cookie_path.parent.mkdir(parents=True, exist_ok=True)
+        old: dict = {}
+        try:
+            if self.cookie_path.exists():
+                data = json.loads(self.cookie_path.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and isinstance(data.get("cookies"), dict):
+                    old = {k: str(v) for k, v in data["cookies"].items() if v}
+        except Exception:
+            old = {}
+        merged = dict(old)
+        merged.update({k: v for k, v in self.cookies.items() if v})
+        if old.get("SESSDATA") and not self.cookies.get("SESSDATA"):
+            merged["SESSDATA"] = old["SESSDATA"]
+            if old.get("bili_jct") and not self.cookies.get("bili_jct"):
+                merged["bili_jct"] = old["bili_jct"]
+        if not self.uname and isinstance(old, dict):
+            pass
         payload = {
-            "cookies": self.cookies,
+            "cookies": merged,
             "login_time": self.login_time or int(time.time()),
             "uname": self.uname,
             "mid": self.mid,
