@@ -755,7 +755,7 @@ class BiliLearningPlugin(Star):
                 )
                 if p.name != "index.md"
             ]
-            items = [self._panel_note_meta(p) for p in files[:60]]
+            items = [self._panel_note_meta(p) for p in files[:1000]]
             archive_dir = self.notes_dir / "notes" / "archive"
             archived = (
                 len(list(archive_dir.rglob("*.md"))) if archive_dir.exists() else 0
