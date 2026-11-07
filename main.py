@@ -1920,6 +1920,8 @@ class BiliLearningPlugin(Star):
         note = result["note"]
         usage = self._usage_today()
         usage["videos"] = int(usage.get("videos", 0)) + 1
+        if result.get("path"):
+            usage["notes"] = int(usage.get("notes", 0)) + 1
         raw_usage = result.get("usage") or {}
         if isinstance(raw_usage, dict):
             usage["tokens"] = int(usage.get("tokens", 0)) + int(
@@ -3445,6 +3447,8 @@ class BiliLearningPlugin(Star):
             return f"没学成：{result.get('error')}"
         usage = self._usage_today()
         usage["videos"] = int(usage.get("videos", 0)) + 1
+        if result.get("path"):
+            usage["notes"] = int(usage.get("notes", 0)) + 1
         raw_usage = result.get("usage") or {}
         if isinstance(raw_usage, dict):
             usage["tokens"] = int(usage.get("tokens", 0)) + int(
@@ -3858,6 +3862,8 @@ class BiliLearningPlugin(Star):
             return
         usage = self._usage_today()
         usage["videos"] = int(usage.get("videos", 0)) + 1
+        if result.get("path"):
+            usage["notes"] = int(usage.get("notes", 0)) + 1
         raw_usage = result.get("usage") or {}
         if isinstance(raw_usage, dict):
             usage["tokens"] = int(usage.get("tokens", 0)) + int(
