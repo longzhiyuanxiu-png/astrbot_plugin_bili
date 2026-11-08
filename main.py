@@ -4088,6 +4088,27 @@ class BiliLearningPlugin(Star):
             logger.warning(f"[bili] 直接发汇总失败，改为返回文本: {exc!r}")
             return self._build_daily_report(limit=999 if full else 5)
 
+    def _append_temp_hint(self, request, hint: str) -> None:
+        """把本轮提示挂到“用户消息侧的临时内容”，不污染 system_prompt（保护前缀缓存）。"""
+        try:
+            from astrbot.core.agent.message import TextPart
+
+            parts = getattr(request, "extra_user_content_parts", None)
+            if parts is not None:
+                part = TextPart(text=hint)
+                mark = getattr(part, "mark_as_temp", None)
+                if callable(mark):
+                    part = mark()
+                parts.append(part)
+                return
+        except Exception:
+            pass
+        # 老版本没有该字段时退回旧做法
+        try:
+            request.system_prompt = (getattr(request, "system_prompt", "") or "") + hint
+        except Exception:
+            pass
+
     @filter.on_llm_request(priority=9998)
     async def _nudge_notes_full(self, event: AstrMessageEvent, request) -> None:
         """主人要她讲/念/复述笔记内容时，逼模型这一轮用 bili_notes(full=true) 拿正文。"""
@@ -4131,7 +4152,7 @@ class BiliLearningPlugin(Star):
                 "请调用 bili_notes 工具（query 填歌名/番名等关键词，full 设成 true）拿到正文，"
                 "再照着正文自然地讲给他听，不要说自己讲不了、也不要让他发原件。"
             )
-        request.system_prompt = sysp + _hint
+        self._append_temp_hint(request, _hint)
 
     @filter.on_llm_request(priority=9999)
     async def _nudge_daily(self, event: AstrMessageEvent, request) -> None:
@@ -4149,10 +4170,11 @@ class BiliLearningPlugin(Star):
         sysp = getattr(request, "system_prompt", "") or ""
         if "bili_daily" in sysp:
             return
-        request.system_prompt = sysp + (
+        self._append_temp_hint(
+            request,
             "\n\n【这一轮必须调用工具】主人在问今天的学习汇总或笔记清单，"
             "请直接调用 bili_daily 工具（他说「全部」「都要看」就把 full 设成 true），"
-            "把工具返回的内容原样发给他，不要自己编。"
+            "把工具返回的内容原样发给他，不要自己编。",
         )
 
     # 以下是定时学习相关的方法

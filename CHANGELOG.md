@@ -1,3 +1,8 @@
+## 0.1.4
+
+- 每轮提醒改用 `extra_user_content_parts`（临时内容，不落历史），不再改写 system_prompt，避免破坏系统提示前缀缓存
+- 转写缓存目录的说明改成「插件数据目录 whisper/」，与实际默认一致
+
 ## 0.1.3
 
 - 数据目录改为 AstrBot 规范的 `data/plugin_data/astrbot_plugin_bili/`（笔记、cookie、DeepSeek key、whisper 缓存），旧数据首次启动自动迁移
