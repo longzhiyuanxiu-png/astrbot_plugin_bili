@@ -1,3 +1,9 @@
+## 0.1.3
+
+- 数据目录改为 AstrBot 规范的 `data/plugin_data/astrbot_plugin_bili/`（笔记、cookie、DeepSeek key、whisper 缓存），旧数据首次启动自动迁移
+- 日志统一使用 `astrbot.api.logger`，移除内置 logging 回退
+- 删除笔记时清理长期记忆改为调用 livingmemory 插件接口，不再直接访问其数据库文件
+
 # 更新日志
 
 ## v0.1.2（2026-11-08）

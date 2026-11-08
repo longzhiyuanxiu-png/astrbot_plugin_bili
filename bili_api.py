@@ -15,11 +15,7 @@ try:
     import httpx
 except Exception:  # 依赖没装时先加载插件，自动安装完成后即可用
     httpx = None
-try:  # 允许脱离 AstrBot 单独 import（测试用）
-    from astrbot.api import logger
-except Exception:  # pragma: no cover
-    import logging
-    logger = logging.getLogger("bili_api")
+from astrbot.api import logger
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"

@@ -49,12 +49,39 @@ INTEREST_PRESETS: Dict[str, List[str]] = {
     "二次元": ["二次元 2.20", "MMD 2.00", "虚拟主播 2.00"],
 }
 
+def _plugin_data_dir() -> Path:
+    """AstrBot 规定的插件数据目录：data/plugin_data/<plugin_name>。"""
+    try:
+        from astrbot.core.star.star_tools import StarTools
+
+        return Path(StarTools.get_data_dir("astrbot_plugin_bili"))
+    except Exception:  # 脱离 AstrBot 单独跑测试时
+        return Path(__file__).parent / ".data"
+
+
+def _migrate_legacy(new_dir: Path, legacy: Path, names) -> None:
+    """旧版把数据放在插件目录，首次启动搬到数据目录（不覆盖已有文件）。"""
+    try:
+        new_dir.mkdir(parents=True, exist_ok=True)
+        if not legacy.exists() or legacy.resolve() == new_dir.resolve():
+            return
+        for name in names:
+            src, dst = legacy / name, new_dir / name
+            if src.exists() and not dst.exists():
+                if src.is_dir():
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+    except Exception as exc:
+        logger.warning(f"[bili] 旧数据迁移失败：{exc!r}")
+
+
 DESC = (
     "📺 让她用自己的B站小号自主学习：自己选题、看视频、写笔记、主动分享收获。"
     "支持点赞/收藏（限额）、弹幕热评输入、知识入库、语音汇报。"
 )
 DEFAULT_ADMIN = ""  # 留空则只认配置里的 admin_ids 或 AstrBot 管理员
-DEFAULT_NOTES_DIR = str(Path(__file__).parent / "notes")
+DEFAULT_NOTES_DIR = str(_plugin_data_dir() / "notes")
 _CMD_RE = re.compile(r"^[/／]?\s*(?:bili|b站)\s*", re.I)
 
 class _FlatConfig(dict):
@@ -100,9 +127,11 @@ class BiliLearningPlugin(Star):
         self._raw_config = config
         self.config = _FlatConfig(config)
         self.notes_dir = Path(self.config.get("notes_dir") or DEFAULT_NOTES_DIR)
+        if not self.config.get("notes_dir"):
+            _migrate_legacy(self.notes_dir, Path(__file__).parent / "notes", ("state.json", "activity.log", "notes"))
         self.notes_dir.mkdir(parents=True, exist_ok=True)
         self.cookie_path = Path(str(self.config.get("cookie_path") or "").strip()
-                               or (Path(__file__).parent / "bili-cookie.json"))
+                               or (_plugin_data_dir() / "bili-cookie.json"))
         # 兴趣模板：只选了方向、没填种子时，按模板展开成种子
         try:
             if not list(self.config.get("interest_topics") or []) and list(
@@ -675,7 +704,7 @@ class BiliLearningPlugin(Star):
             return dict(cache["data"], stale=False)
 
         key_path = Path(str(self.config.get("deepseek_key_path") or "").strip()
-                       or (Path(__file__).parent / "deepseek-key.txt"))
+                       or (_plugin_data_dir() / "deepseek-key.txt"))
         try:
             key = key_path.read_text(encoding="utf-8-sig").strip().strip('"').strip()
         except Exception as exc:
@@ -1025,41 +1054,43 @@ class BiliLearningPlugin(Star):
         }
 
     async def _drop_memory_by_bvid(self, bvid: str) -> int:
-        """删掉某 BV 对应的长期记忆，返回删除条数。
-
-        走 livingmemory 的公开检索接口（search_memories + delete_memory），
-        不直连它的 sqlite —— 这样插件改名/搬家也不会断。
-        """
-        bvid = (bvid or "").strip()
-        if not bvid:
-            return 0
-        eng = self._memory_engine()
-        if eng is None:
-            logger.info("[bili] 没有可用的记忆引擎，跳过删记忆")
+        """按 BV 号删掉长期记忆里对应的条目（走对方插件的公开接口）。"""
+        try:
+            from data.plugins.astrbot_plugin_livingmemory.core.passive_group_capture import (
+                get_active_plugin,
+            )
+        except Exception:
             return 0
         try:
-            results = await eng.search_memories(bvid, k=10)
-        except Exception as exc:
-            logger.warning(f"[bili] 记忆检索失败，跳过删记忆: {exc!r}")
-            return 0
-        ids = []
-        for r in results or []:
-            body = str(getattr(r, "content", "") or "") + json.dumps(
-                getattr(r, "metadata", {}) or {}, ensure_ascii=False, default=str
-            )
-            if bvid in body:
-                try:
-                    ids.append(int(getattr(r, "doc_id")))
-                except Exception:
-                    continue
-        removed = 0
-        for mid in dict.fromkeys(ids):
+            plugin = get_active_plugin()
+            engine = getattr(plugin, "memory_engine", None) if plugin else None
+            if engine is None:
+                return 0
             try:
-                if await eng.delete_memory(mid):
-                    removed += 1
-            except Exception as exc:
-                logger.warning(f"[bili] 删除记忆 {mid} 失败: {exc!r}")
-        return removed
+                items = await engine.search_memories(bvid, k=20)
+            except TypeError:
+                items = await engine.search_memories(query=bvid, k=20)
+            except Exception:
+                return 0
+            removed = 0
+            for item in items or []:
+                doc_id = getattr(item, "doc_id", None)
+                blob = " ".join(
+                    str(x) for x in (
+                        getattr(item, "text", "") or "",
+                        getattr(item, "metadata", "") or "",
+                    )
+                )
+                if doc_id and bvid in blob:
+                    try:
+                        if await engine.delete_memory(int(doc_id)):
+                            removed += 1
+                    except Exception:
+                        continue
+            return removed
+        except Exception:
+            return 0
+
 
     async def _panel_note_delete(
         self, payload=None, name: str = "", with_memory: bool = False, **kwargs
@@ -1115,48 +1146,6 @@ class BiliLearningPlugin(Star):
             "ok": True,
             "data": {"name": safe, "trash": dst.name, "memory_removed": removed},
         }
-
-    async def _drop_memory_by_bvid(self, bvid: str) -> int:
-        """按 BV 号删掉她长期记忆里对应的条目，返回删除条数。"""
-        import sqlite3 as _sqlite3
-
-        try:
-            db = (
-                Path(__file__).resolve().parents[2]
-                / "plugin_data"
-                / "astrbot_plugin_livingmemory"
-                / "livingmemory.db"
-            )
-            if not db.exists():
-                return 0
-            con = _sqlite3.connect(str(db))
-            try:
-                ids = [
-                    int(r[0])
-                    for r in con.execute(
-                        "select id from documents where metadata like ?", (f"%{bvid}%",)
-                    ).fetchall()
-                ]
-            finally:
-                con.close()
-            if not ids:
-                return 0
-            eng = self._memory_engine()
-            if eng is None:
-                logger.warning("[bili] 记忆引擎不可用，跳过删记忆")
-                return 0
-            n = 0
-            for mid in ids:
-                try:
-                    if await eng.delete_memory(mid):
-                        n += 1
-                except Exception as exc:
-                    logger.warning(f"[bili] 删除记忆 {mid} 失败: {exc!r}")
-            logger.info(f"[bili] 已删除 {bvid} 的记忆 {n}/{len(ids)} 条")
-            return n
-        except Exception as exc:
-            logger.warning(f"[bili] 删记忆出错: {exc!r}")
-            return 0
 
     async def _panel_interest_save(
         self,

@@ -12,6 +12,17 @@ import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
+
+def _data_dir() -> Path:
+    """AstrBot 插件数据目录（与 main.py 一致）。"""
+    try:
+        from astrbot.core.star.star_tools import StarTools
+
+        return Path(StarTools.get_data_dir("astrbot_plugin_bili"))
+    except Exception:
+        return Path(__file__).parent / ".data"
+
+
 from typing import Any, Dict, List, Optional, Tuple
 
 from astrbot.api import logger
@@ -643,7 +654,7 @@ class Learner:
         if not urls:
             return "", "拿不到音轨地址"
 
-        tmpdir = Path(str(self.config.get("whisper_cache_dir") or str(Path.home() / ".cache" / "bili_whisper"))) / "_tmp"
+        tmpdir = Path(str(self.config.get("whisper_cache_dir") or str(_data_dir() / "whisper"))) / "_tmp"
         tmpdir.mkdir(parents=True, exist_ok=True)
         raw = tmpdir / f"{bvid}.m4s"
         wav = tmpdir / f"{bvid}.wav"
@@ -721,7 +732,7 @@ class Learner:
     def _get_whisper_model(self):
         """懒加载 whisper 模型（进程内共享，可被空闲释放；本机 av 不兼容，直接喂 numpy）。"""
         name = str(self.config.get("whisper_model") or "small")
-        cache_dir = str(self.config.get("whisper_cache_dir") or str(Path.home() / ".cache" / "bili_whisper"))
+        cache_dir = str(self.config.get("whisper_cache_dir") or str(_data_dir() / "whisper"))
         try:
             threads = int(self.config.get("whisper_threads") or 0)
         except Exception:
