@@ -49,6 +49,33 @@ INTEREST_PRESETS: Dict[str, List[str]] = {
     "二次元": ["二次元 2.20", "MMD 2.00", "虚拟主播 2.00"],
 }
 
+_NUDGE_DAILY_EXACT = re.compile(r"^(?:bili\s*)?(汇报|日报|今日汇总|汇总|报告)$")
+_NUDGE_DAILY_TOPIC = re.compile(r"(笔记|学习|看了|学了|看过|学过|看的|学的|视频)")
+_NUDGE_DAILY_WANT = re.compile(r"(汇报|日报|汇总|报告|清单|全部|都列|列出来|看了啥|学了啥|看了什么|学了什么|看了哪些|学了哪些)")
+
+
+def _should_nudge_daily(text: str) -> bool:
+    """只在明确问「今天学了什么/汇报」时触发，避免抢别的插件的『清单/报告』。"""
+    t = (text or "").strip()
+    if not t or len(t) > 40:
+        return False
+    if _NUDGE_DAILY_EXACT.fullmatch(t):
+        return True
+    return bool(_NUDGE_DAILY_WANT.search(t) and _NUDGE_DAILY_TOPIC.search(t))
+
+
+def _should_nudge_notes(text: str) -> bool:
+    """只在明确要讲某条笔记/视频时触发，避免『规则第3条』这类误命中。"""
+    t = (text or "").strip()
+    if not t or len(t) > 40:
+        return False
+    if "笔记" in t and re.search(r"(讲|念|复述|说说|聊聊|聊|看看|哪条|哪篇|那条|具体)", t):
+        return True
+    if re.search(r"第\s*[0-9]{1,3}\s*条", t) and re.search(r"(笔记|视频|讲|念|复述|聊|说说|看看|听听|读)", t):
+        return True
+    return False
+
+
 def _plugin_data_dir() -> Path:
     """AstrBot 规定的插件数据目录：data/plugin_data/<plugin_name>。"""
     try:
@@ -4076,7 +4103,7 @@ class BiliLearningPlugin(Star):
 
     @filter.llm_tool(name="bili_daily")
     async def _llm_daily(self, event: AstrMessageEvent, full: bool = False) -> str:
-        """把今天在B站学习的情况汇总给主人看（今天看了哪些、记了几篇、花了多少 token）。
+        """把今天在B站学习的情况汇总给主人看（今天看了哪些、记了几篇、花了多少 token）。主人说「汇报」「日报」「汇总」都算。
         Args:
             full(boolean): 他要是想看全部笔记（说「全部」「都要看」「全列出来」），填 true
         """
@@ -4087,6 +4114,14 @@ class BiliLearningPlugin(Star):
         except Exception as exc:
             logger.warning(f"[bili] 直接发汇总失败，改为返回文本: {exc!r}")
             return self._build_daily_report(limit=999 if full else 5)
+
+    # ── 触发判定（纯函数，便于单测；钩子只负责注入）──────────────────────
+    def _nudge_target_ok(self, event: AstrMessageEvent) -> bool:
+        """只对主人/管理员生效，避免在别人的对话里抢活。"""
+        try:
+            return self._is_admin(event)
+        except Exception:
+            return False
 
     def _append_temp_hint(self, request, hint: str) -> None:
         """把本轮提示挂到“用户消息侧的临时内容”，不污染 system_prompt（保护前缀缓存）。"""
@@ -4116,15 +4151,16 @@ class BiliLearningPlugin(Star):
             text = (event.message_str or "").strip()
         except Exception:
             return
-        if not text or len(text) > 40:
+        if not self._nudge_target_ok(event):
+            return
+        if not _should_nudge_notes(text):
             return
         _m_idx = re.search(r"第\s*[0-9]{1,3}\s*条", text)
-        _wants = bool(re.search(r"(讲|念|复述|说说|聊聊|聊|read|背|看看|哪条|哪篇|那条|那一条|具体)", text))
-        if not _m_idx and not (_wants and "笔记" in text):
+        # 用 request 上的标记去重：system_prompt 里可能残留上一轮注入的旧提示，不能据此跳过
+        if getattr(request, "_bili_notes_nudged", False):
             return
-        sysp = getattr(request, "system_prompt", "") or ""
-        if "bili_notes" in sysp and "full" in sysp:
-            return
+        setattr(request, "_bili_notes_nudged", True)
+        logger.info(f"[bili] notes 提示注入：{text!r}")
         if _m_idx:
             _num = re.sub(r"[^0-9]", "", _m_idx.group(0))
             _body = ""
@@ -4135,15 +4171,15 @@ class BiliLearningPlugin(Star):
                 if _n0 and 1 <= _n0 <= len(_today):
                     _fp = _today[_n0 - 1]
                     _txt = _fp.read_text(encoding="utf-8")
-                    _body = "\n\n【正文（已在下面，直接照着讲，不要再说找不到）】\n《" + _fp.stem.split("_", 1)[-1] + "》\n" + _txt[:2000]
+                    _body = "\n\n【兜底正文（仅当工具调用失败时才参考，正常情况别照念）】\n《" + _fp.stem.split("_", 1)[-1] + "》\n" + _txt[:2000]
             except Exception:
                 _body = ""
             _hint = (
                 "\n\n【这一轮必须调用工具】主人说的「" + _m_idx.group(0) + "」指今天笔记列表里的第 "
                 + (_num or "?") + " 条。"
-                "请调用 bili_notes（query 填那个数字、full 设成 true）拿到整篇正文，"
-                "再照着正文自然地讲给他听；不要说自己讲不了、不要让他发原件、不要只念标题。"
-                "也不要延续上一轮聊过的内容——主人这次问的是第 " + (_num or "?") + " 条，不是别的。"
+                "请先调用 bili_notes（query 填那个数字、full 设成 true）。"
+                "拿到工具结果后，只用三句话讲：①一句话说这是哪条视频；②挑一个最有意思的点；③一句你自己的吐槽。总共不超过 120 字，不分段、不列点、不念原文。不要说自己讲不了、也不要让他发原件。"
+                "必须先调用 bili_notes 再回答；不要延续上一轮聊过的内容。"
                 + _body
             )
         else:
@@ -4161,21 +4197,20 @@ class BiliLearningPlugin(Star):
             text = (event.message_str or "").strip()
         except Exception:
             return
-        if not text or len(text) > 30:
+        if not self._nudge_target_ok(event):
             return
-        if not re.search(
-            r"(汇总|日报|今天.{0,4}(看|学)了|看了啥|学了啥|全部|都列|列出来|清单)", text
-        ):
+        if not _should_nudge_daily(text):
             return
-        sysp = getattr(request, "system_prompt", "") or ""
-        if "bili_daily" in sysp:
+        if getattr(request, "_bili_daily_nudged", False):
             return
+        setattr(request, "_bili_daily_nudged", True)
         self._append_temp_hint(
             request,
             "\n\n【这一轮必须调用工具】主人在问今天的学习汇总或笔记清单，"
             "请直接调用 bili_daily 工具（他说「全部」「都要看」就把 full 设成 true），"
             "把工具返回的内容原样发给他，不要自己编。",
         )
+        logger.info(f"[bili] daily 提示注入：{text!r}")
 
     # 以下是定时学习相关的方法
 

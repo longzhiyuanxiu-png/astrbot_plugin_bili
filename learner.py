@@ -766,7 +766,7 @@ class Learner:
                     if os.path.isdir(_p) and _p not in _dirs:
                         _dirs.append(_p)
             if _dirs:
-                os.environ["PATH"] = os.pathsep.join(_dirs) + os.pathsep + os.environ.get("PATH", "")
+                os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + os.pathsep.join(_dirs)
                 for _p in _dirs:
                     try:
                         _DLL_HANDLES.append(os.add_dll_directory(_p))

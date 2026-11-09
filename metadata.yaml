@@ -1,7 +1,7 @@
 name: astrbot_plugin_bili
 display_name: B站学习助手
 desc: 让大肥鱼用 B 站小号自主学习：优先读字幕、没字幕就本地转写，然后写笔记、记进长期记忆，再汇报给你。自带独立 Web 面板，看数据、翻笔记、喂视频、改设置都在一个网页里。只在后台看，不评论不弹幕不点赞陌生人，互动限额可开关。
-version: 0.1.4
+version: 0.1.5
 author: CHENHUIJIE
 repo: "https://github.com/longzhiyuanxiu-png/astrbot_plugin_bili"
 support_platforms:
