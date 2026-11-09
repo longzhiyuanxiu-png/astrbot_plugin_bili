@@ -494,7 +494,15 @@ class BiliLearningPlugin(Star):
         png = self._qr_png(q["url"])
         self._qr_state = {"status": "scanning", "msg": "用手机 B站 App 扫这个码", "at": int(time.time())}
         try:
-            asyncio.create_task(self._qr_watch(q["qrcode_key"]))
+            _qw = asyncio.create_task(self._qr_watch(q["qrcode_key"]))
+            self._poll_tasks.add(_qw)
+
+            def _done_qw(t):
+                self._poll_tasks.discard(t)
+                if not t.cancelled() and t.exception():
+                    logger.warning(f"[bili] 扫码登录任务异常: {t.exception()!r}")
+
+            _qw.add_done_callback(_done_qw)
         except Exception:
             pass
         return {"ok": True, "qr": png, "logged_in": False}
@@ -1682,7 +1690,15 @@ class BiliLearningPlugin(Star):
         if not self.api.logged_in:
             return {"ok": False, "error": "小号还没登录，先在 QQ 里发 /bili 登录", "data": {}}
         try:
-            asyncio.create_task(self._auto_learn())
+            _lt = asyncio.create_task(self._auto_learn())
+            self._poll_tasks.add(_lt)
+
+            def _done_lt(t):
+                self._poll_tasks.discard(t)
+                if not t.cancelled() and t.exception():
+                    logger.warning(f"[bili] 学习任务异常: {t.exception()!r}")
+
+            _lt.add_done_callback(_done_lt)
         except Exception as exc:
             return {"ok": False, "error": str(exc), "data": {}}
         self._log("后台页面点了「立刻学一轮」")

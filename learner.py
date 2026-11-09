@@ -695,13 +695,16 @@ class Learner:
             if limit_sec:
                 cmd += ["-t", str(int(limit_sec))]
             cmd.append(str(wav))
-            subprocess.run(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=900,
-                check=False,
-            )
+            def _run_ffmpeg_once():
+                return subprocess.run(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=900,
+                    check=False,
+                )
+
+            await loop.run_in_executor(None, _run_ffmpeg_once)
             wav_ready = wav.exists() and wav.stat().st_size >= 2048
         except FileNotFoundError:
             logger.info("[bili] 没找到 ffmpeg，改用自带解码器（PyAV）")
